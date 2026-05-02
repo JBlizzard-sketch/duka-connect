@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -287,26 +287,28 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
               </h4>
               <div className="divide-y divide-border rounded-lg border overflow-hidden">
                 {customer.recentOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    data-testid={`row-order-${order.id}`}
-                    className="flex items-center justify-between px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-muted-foreground">
-                        #{order.id}
-                      </span>
-                      <StatusBadge status={order.status} />
+                  <Link key={order.id} href={`/orders/${order.id}`} onClick={onClose}>
+                    <div
+                      data-testid={`row-order-${order.id}`}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-muted-foreground">
+                          #{order.id}
+                        </span>
+                        <StatusBadge status={order.status} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold">
+                          {formatCurrency(Number(order.totalAmount))}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimeAgo(order.createdAt)}
+                        </span>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold">
-                        {formatCurrency(Number(order.totalAmount))}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTimeAgo(order.createdAt)}
-                      </span>
-                    </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

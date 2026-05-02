@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useListOrders } from "@workspace/api-client-react";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Download } from "lucide-react";
+import { ChevronRight, Search, Download, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
+import { cn } from "@/lib/utils";
 
 const STATUSES = [
   { value: "", label: "All" },
@@ -18,13 +19,43 @@ const STATUSES = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const DATE_FILTERS = [
+  { value: "all", label: "All time" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+];
+
+function getDateRange(filter: string): { dateFrom?: Date; dateTo?: Date } {
+  if (filter === "all") return {};
+  const now = new Date();
+  const dateTo = new Date(now);
+  dateTo.setHours(23, 59, 59, 999);
+  const dateFrom = new Date(now);
+  if (filter === "today") {
+    dateFrom.setHours(0, 0, 0, 0);
+  } else if (filter === "week") {
+    dateFrom.setDate(now.getDate() - 6);
+    dateFrom.setHours(0, 0, 0, 0);
+  } else if (filter === "month") {
+    dateFrom.setDate(now.getDate() - 29);
+    dateFrom.setHours(0, 0, 0, 0);
+  }
+  return { dateFrom, dateTo };
+}
+
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
+  const { dateFrom, dateTo } = useMemo(() => getDateRange(dateFilter), [dateFilter]);
+
   const { data, isLoading } = useListOrders({
     status: statusFilter || undefined,
+    dateFrom,
+    dateTo,
     page,
     limit: 50,
   } as Parameters<typeof useListOrders>[0]);
@@ -53,7 +84,7 @@ export default function OrdersPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `orders-${dateFilter !== "all" ? dateFilter + "-" : ""}${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -107,6 +138,25 @@ export default function OrdersPage() {
         />
       </div>
 
+      {/* Date filters */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        {DATE_FILTERS.map((d) => (
+          <button
+            key={d.value}
+            onClick={() => { setDateFilter(d.value); setPage(1); }}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+              dateFilter === d.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-foreground border-border hover:bg-muted"
+            )}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+
       {/* Status filters */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {STATUSES.map((s) => (
@@ -117,11 +167,12 @@ export default function OrdersPage() {
               setStatusFilter(s.value);
               setPage(1);
             }}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
               statusFilter === s.value
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background text-foreground border-border hover:bg-muted"
-            }`}
+            )}
           >
             {s.label}
           </button>

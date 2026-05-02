@@ -572,6 +572,7 @@ function ImportCsvDialog({ onImported }: { onImported: () => void }) {
 export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -591,7 +592,15 @@ export default function InventoryPage() {
     },
   });
 
-  const products = data?.products ?? [];
+  const allProducts = data?.products ?? [];
+
+  const categories = Array.from(
+    new Set(allProducts.map((p) => p.category).filter(Boolean) as string[])
+  ).sort();
+
+  const products = categoryFilter
+    ? allProducts.filter((p) => p.category === categoryFilter)
+    : allProducts;
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
@@ -612,8 +621,8 @@ export default function InventoryPage() {
       </div>
 
       {/* Search & filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[160px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             data-testid="input-search"
@@ -637,6 +646,37 @@ export default function InventoryPage() {
           Low Stock
         </button>
       </div>
+
+      {/* Category filter chips */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setCategoryFilter("")}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+              categoryFilter === ""
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-foreground border-border hover:bg-muted"
+            )}
+          >
+            All
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat === categoryFilter ? "" : cat)}
+              className={cn(
+                "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                categoryFilter === cat
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-foreground border-border hover:bg-muted"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Product grid */}
       {isLoading ? (
