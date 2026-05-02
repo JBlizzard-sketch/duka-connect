@@ -127,6 +127,10 @@ export const CreateOrderBody = zod.object({
     }),
   ),
   notes: zod.string().optional(),
+  loyaltyDiscount: zod
+    .number()
+    .optional()
+    .describe("Points to redeem as discount (100 pts = KES 100 off)"),
 });
 
 /**
@@ -842,6 +846,7 @@ export const GetBusinessProfileResponse = zod.object({
   mpesaPasskeySet: zod.boolean(),
   mpesaConsumerKeySet: zod.boolean(),
   mpesaConnected: zod.boolean(),
+  ownerPhone: zod.string().nullish(),
   currency: zod.string().default(getBusinessProfileResponseCurrencyDefault),
   timezone: zod.string().default(getBusinessProfileResponseTimezoneDefault),
   logoUrl: zod.string().nullish(),
@@ -860,6 +865,10 @@ export const UpdateBusinessProfileBody = zod.object({
   mpesaPasskey: zod.string().optional(),
   mpesaConsumerKey: zod.string().optional(),
   mpesaConsumerSecret: zod.string().optional(),
+  ownerPhone: zod
+    .string()
+    .optional()
+    .describe("Owner's WhatsApp number for restock alerts (e.g. 254712345678)"),
   currency: zod.string().optional(),
   timezone: zod.string().optional(),
   logoUrl: zod.string().optional(),
@@ -879,6 +888,7 @@ export const UpdateBusinessProfileResponse = zod.object({
   mpesaPasskeySet: zod.boolean(),
   mpesaConsumerKeySet: zod.boolean(),
   mpesaConnected: zod.boolean(),
+  ownerPhone: zod.string().nullish(),
   currency: zod.string().default(updateBusinessProfileResponseCurrencyDefault),
   timezone: zod.string().default(updateBusinessProfileResponseTimezoneDefault),
   logoUrl: zod.string().nullish(),

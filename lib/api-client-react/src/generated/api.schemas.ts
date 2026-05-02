@@ -169,6 +169,8 @@ export interface CreateOrderRequest {
   customerId: number;
   items: CreateOrderRequestItemsItem[];
   notes?: string;
+  /** Points to redeem as discount (100 pts = KES 100 off) */
+  loyaltyDiscount?: number;
 }
 
 export interface UpdateOrderStatusRequest {
@@ -386,6 +388,7 @@ export interface BusinessProfile {
   mpesaPasskeySet: boolean;
   mpesaConsumerKeySet: boolean;
   mpesaConnected: boolean;
+  ownerPhone?: string | null;
   currency: string;
   timezone: string;
   logoUrl?: string | null;
@@ -401,6 +404,8 @@ export interface UpdateBusinessProfileRequest {
   mpesaPasskey?: string;
   mpesaConsumerKey?: string;
   mpesaConsumerSecret?: string;
+  /** Owner's WhatsApp number for restock alerts (e.g. 254712345678) */
+  ownerPhone?: string;
   currency?: string;
   timezone?: string;
   logoUrl?: string;

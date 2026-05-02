@@ -18,6 +18,7 @@ import {
   Check,
   Loader2,
   Package,
+  Star,
 } from "lucide-react";
 import {
   Dialog,
@@ -51,6 +52,7 @@ export default function NewOrderDialog({
   const [productSearch, setProductSearch] = useState("");
   const [items, setItems] = useState<LineItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [redeemPoints, setRedeemPoints] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -93,7 +95,11 @@ export default function NewOrderDialog({
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
-  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const availablePoints = selectedCustomer?.loyaltyPoints ?? 0;
+  const maxRedeemable = Math.min(availablePoints, Math.floor(subtotal / 100) * 100);
+  const loyaltyDiscount = redeemPoints && maxRedeemable > 0 ? maxRedeemable : 0;
+  const total = Math.max(0, subtotal - loyaltyDiscount);
 
   function handleClose() {
     setStep("customer");
@@ -102,6 +108,7 @@ export default function NewOrderDialog({
     setProductSearch("");
     setItems([]);
     setNotes("");
+    setRedeemPoints(false);
     onClose();
   }
 
@@ -146,6 +153,7 @@ export default function NewOrderDialog({
           quantity: i.quantity,
         })),
         notes: notes || undefined,
+        loyaltyDiscount: loyaltyDiscount > 0 ? loyaltyDiscount : undefined,
       },
     });
   }
@@ -399,7 +407,52 @@ export default function NewOrderDialog({
                     </span>
                   </div>
                 ))}
+
+                {/* Loyalty redemption */}
+                {availablePoints >= 100 && maxRedeemable >= 100 && (
+                  <div className="mt-2 flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-3.5 w-3.5 text-amber-500" />
+                      <div>
+                        <p className="text-xs font-medium text-amber-800">
+                          Redeem {maxRedeemable} loyalty points
+                        </p>
+                        <p className="text-[10px] text-amber-600">
+                          Save {formatCurrency(maxRedeemable)} · {availablePoints} pts available
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRedeemPoints((v) => !v)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
+                        redeemPoints ? "bg-amber-500" : "bg-muted-foreground/30"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                          redeemPoints ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between pt-2 border-t border-border">
+                  {loyaltyDiscount > 0 && (
+                    <div className="w-full flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                  )}
+                </div>
+                {loyaltyDiscount > 0 && (
+                  <div className="flex items-center justify-between text-xs text-amber-700">
+                    <span>Loyalty discount ({maxRedeemable} pts)</span>
+                    <span>−{formatCurrency(loyaltyDiscount)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t border-border">
                   <span className="text-sm font-bold">Total</span>
                   <span className="text-lg font-bold text-primary">
                     {formatCurrency(total)}
@@ -483,6 +536,9 @@ export default function NewOrderDialog({
                 <Check className="h-4 w-4" />
               )}
               Confirm Order · {formatCurrency(total)}
+              {loyaltyDiscount > 0 && (
+                <span className="ml-1 text-xs opacity-80">(−{formatCurrency(loyaltyDiscount)})</span>
+              )}
             </button>
           )}
         </div>

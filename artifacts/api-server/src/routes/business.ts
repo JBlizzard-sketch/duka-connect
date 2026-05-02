@@ -37,6 +37,7 @@ router.get("/business/profile", async (req, res) => {
     mpesaPasskeySet: !!business.mpesaPasskey,
     mpesaConsumerKeySet: !!business.mpesaConsumerKey,
     mpesaConnected: business.mpesaConnected,
+    ownerPhone: business.ownerPhone,
     currency: business.currency,
     timezone: business.timezone,
     logoUrl: business.logoUrl,
@@ -60,6 +61,7 @@ router.patch("/business/profile", async (req, res) => {
     mpesaPasskey,
     mpesaConsumerKey,
     mpesaConsumerSecret,
+    ownerPhone,
     currency,
     timezone,
     logoUrl,
@@ -90,6 +92,7 @@ router.patch("/business/profile", async (req, res) => {
     updates.mpesaConsumerSecret = mpesaConsumerSecret;
   }
   // Mark Mpesa connected when all three creds are present
+  if (ownerPhone !== undefined) updates.ownerPhone = ownerPhone;
   if (mpesaShortCode !== undefined || mpesaPasskey !== undefined || mpesaConsumerKey !== undefined || mpesaConsumerSecret !== undefined) {
     // Re-fetch to check combined state after update
     const current = await db.select().from(businessesTable).where(eq(businessesTable.id, BUSINESS_ID)).limit(1);
@@ -135,6 +138,7 @@ router.patch("/business/profile", async (req, res) => {
     mpesaPasskeySet: !!business.mpesaPasskey,
     mpesaConsumerKeySet: !!business.mpesaConsumerKey,
     mpesaConnected: business.mpesaConnected,
+    ownerPhone: business.ownerPhone,
     currency: business.currency,
     timezone: business.timezone,
     logoUrl: business.logoUrl,

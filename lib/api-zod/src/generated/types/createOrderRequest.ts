@@ -11,4 +11,6 @@ export interface CreateOrderRequest {
   customerId: number;
   items: CreateOrderRequestItemsItem[];
   notes?: string;
+  /** Points to redeem as discount (100 pts = KES 100 off) */
+  loyaltyDiscount?: number;
 }

@@ -8,6 +8,7 @@ import {
   productVariantsTable,
   paymentsTable,
   whatsappMessagesTable,
+  businessesTable,
 } from "@workspace/db";
 import { eq, desc, and, gte, lte, sql, count, sum } from "drizzle-orm";
 import {
@@ -81,7 +82,20 @@ router.post("/orders", async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { customerId, items, notes } = parsed.data;
+  const { customerId, items, notes, loyaltyDiscount } = parsed.data;
+
+  // Validate loyalty discount against customer's points
+  if (loyaltyDiscount && loyaltyDiscount > 0) {
+    const [cust] = await db
+      .select({ loyaltyPoints: customersTable.loyaltyPoints })
+      .from(customersTable)
+      .where(eq(customersTable.id, customerId))
+      .limit(1);
+    if (!cust || cust.loyaltyPoints < loyaltyDiscount) {
+      res.status(400).json({ error: "Insufficient loyalty points" });
+      return;
+    }
+  }
 
   // Resolve products
   let totalAmount = 0;
@@ -133,13 +147,17 @@ router.post("/orders", async (req, res) => {
     });
   }
 
+  // Apply loyalty discount
+  const discountKes = loyaltyDiscount ?? 0;
+  const finalAmount = Math.max(0, totalAmount - discountKes);
+
   const [order] = await db
     .insert(ordersTable)
     .values({
       businessId: 1,
       customerId,
-      totalAmount: String(totalAmount),
-      notes,
+      totalAmount: String(finalAmount),
+      notes: notes ?? (discountKes > 0 ? `Loyalty discount applied: KES ${discountKes} (${discountKes} pts)` : undefined),
       status: "pending",
     })
     .returning();
@@ -153,6 +171,17 @@ router.post("/orders", async (req, res) => {
       totalPrice: String(it.totalPrice),
     }))
   );
+
+  // Deduct loyalty points immediately upon order creation
+  if (discountKes > 0) {
+    await db
+      .update(customersTable)
+      .set({
+        loyaltyPoints: sql`${customersTable.loyaltyPoints} - ${discountKes}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(customersTable.id, customerId));
+  }
 
   res.status(201).json(order);
 });
@@ -320,6 +349,41 @@ router.patch("/orders/:id", async (req, res) => {
             .where(eq(productVariantsTable.id, it.variantId!))
         )
     );
+
+    // Fire low-stock alerts for any variant that is now at or below its threshold
+    const variantIds = items.filter((it) => it.variantId != null).map((it) => it.variantId!);
+    if (variantIds.length > 0) {
+      const [business] = await db
+        .select({ ownerPhone: businessesTable.ownerPhone, phoneNumberId: businessesTable.whatsappPhoneNumberId, apiToken: businessesTable.whatsappApiToken })
+        .from(businessesTable)
+        .where(eq(businessesTable.id, 1))
+        .limit(1);
+
+      if (business?.ownerPhone) {
+        const lowVariants = await db
+          .select({
+            id: productVariantsTable.id,
+            name: productVariantsTable.name,
+            stockQuantity: productVariantsTable.stockQuantity,
+            lowStockThreshold: productVariantsTable.lowStockThreshold,
+            productId: productVariantsTable.productId,
+          })
+          .from(productVariantsTable)
+          .where(
+            sql`${productVariantsTable.id} = ANY(${variantIds}) AND cast(${productVariantsTable.stockQuantity} as numeric) <= cast(${productVariantsTable.lowStockThreshold} as numeric)`
+          );
+
+        for (const v of lowVariants) {
+          const [prod] = await db
+            .select({ name: productsTable.name })
+            .from(productsTable)
+            .where(eq(productsTable.id, v.productId))
+            .limit(1);
+          const msg = `⚠️ Low Stock Alert: *${prod?.name ?? "Product"} — ${v.name}* is down to *${Number(v.stockQuantity)} units* (threshold: ${Number(v.lowStockThreshold)}). Time to reorder!`;
+          sendTextMessage(business.ownerPhone, msg).catch(() => {});
+        }
+      }
+    }
   }
 
   // Send WhatsApp status notification only on actual status transitions

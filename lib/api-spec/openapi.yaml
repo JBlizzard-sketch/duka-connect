@@ -904,6 +904,9 @@ components:
             required: [productId, quantity]
         notes:
           type: string
+        loyaltyDiscount:
+          type: integer
+          description: Points to redeem as discount (100 pts = KES 100 off)
       required: [customerId, items]
 
     UpdateOrderStatusRequest:
@@ -1391,6 +1394,9 @@ components:
           type: boolean
         mpesaConnected:
           type: boolean
+        ownerPhone:
+          type: string
+          nullable: true
         currency:
           type: string
           default: KES
@@ -1424,6 +1430,9 @@ components:
           type: string
         mpesaConsumerSecret:
           type: string
+        ownerPhone:
+          type: string
+          description: Owner's WhatsApp number for restock alerts (e.g. 254712345678)
         currency:
           type: string
         timezone:

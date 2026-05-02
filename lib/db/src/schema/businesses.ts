@@ -15,6 +15,7 @@ export const businessesTable = pgTable("businesses", {
   mpesaConsumerKey: text("mpesa_consumer_key"),
   mpesaConsumerSecret: text("mpesa_consumer_secret"),
   mpesaConnected: boolean("mpesa_connected").notNull().default(false),
+  ownerPhone: varchar("owner_phone", { length: 32 }),
   currency: varchar("currency", { length: 10 }).notNull().default("KES"),
   timezone: varchar("timezone", { length: 64 }).notNull().default("Africa/Nairobi"),
   logoUrl: text("logo_url"),

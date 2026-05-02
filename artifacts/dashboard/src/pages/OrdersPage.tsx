@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useListOrders } from "@workspace/api-client-react";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Filter } from "lucide-react";
+import { ChevronRight, Search, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
@@ -32,6 +32,32 @@ export default function OrdersPage() {
   const allOrders = data?.orders ?? [];
   const meta = data?.meta;
 
+  function exportCsv() {
+    const rows = [
+      ["Order ID", "Status", "Customer", "Phone", "WA Ref", "Amount (KES)", "Date"].join(","),
+      ...allOrders.map((o) => {
+        const order = o as typeof o & { customerName?: string | null; customerPhone?: string | null };
+        const waRef = order.notes?.match(/WA-[A-Z0-9]+/)?.[0] ?? "";
+        return [
+          order.id,
+          order.status,
+          `"${(order.customerName ?? "").replace(/"/g, '""')}"`,
+          order.customerPhone ?? "",
+          waRef,
+          Number(order.totalAmount).toFixed(2),
+          new Date(order.createdAt).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }),
+        ].join(",");
+      }),
+    ].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const orders = search.trim()
     ? allOrders.filter((order) => {
         const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
@@ -50,11 +76,23 @@ export default function OrdersPage() {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Orders</h1>
-        {meta && (
-          <span className="text-sm text-muted-foreground">
-            {search ? `${orders.length} of ${meta.total}` : `${meta.total} total`}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {meta && (
+            <span className="text-sm text-muted-foreground">
+              {search ? `${orders.length} of ${meta.total}` : `${meta.total} total`}
+            </span>
+          )}
+          {allOrders.length > 0 && (
+            <button
+              onClick={exportCsv}
+              title="Export CSV"
+              className="flex items-center gap-1.5 text-xs font-medium border border-input rounded-md px-3 py-1.5 hover:bg-muted transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}

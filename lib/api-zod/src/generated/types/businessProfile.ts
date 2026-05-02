@@ -17,6 +17,7 @@ export interface BusinessProfile {
   mpesaPasskeySet: boolean;
   mpesaConsumerKeySet: boolean;
   mpesaConnected: boolean;
+  ownerPhone?: string | null;
   currency: string;
   timezone: string;
   logoUrl?: string | null;

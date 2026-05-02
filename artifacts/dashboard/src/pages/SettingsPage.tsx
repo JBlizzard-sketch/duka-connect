@@ -100,6 +100,7 @@ function ProfileSection() {
     name: "",
     currency: "",
     timezone: "",
+    ownerPhone: "",
     whatsappPhoneNumberId: "",
     whatsappBusinessAccountId: "",
     whatsappApiToken: "",
@@ -116,6 +117,7 @@ function ProfileSection() {
         name: profile.name ?? "",
         currency: profile.currency ?? "KES",
         timezone: profile.timezone ?? "Africa/Nairobi",
+        ownerPhone: profile.ownerPhone ?? "",
         whatsappPhoneNumberId: profile.whatsappPhoneNumberId ?? "",
         whatsappBusinessAccountId: profile.whatsappBusinessAccountId ?? "",
         mpesaShortCode: profile.mpesaShortCode ?? "",
@@ -146,6 +148,7 @@ function ProfileSection() {
     if (form.name) data.name = form.name;
     if (form.currency) data.currency = form.currency;
     if (form.timezone) data.timezone = form.timezone;
+    if (form.ownerPhone) data.ownerPhone = form.ownerPhone;
     if (form.whatsappPhoneNumberId) data.whatsappPhoneNumberId = form.whatsappPhoneNumberId;
     if (form.whatsappBusinessAccountId) data.whatsappBusinessAccountId = form.whatsappBusinessAccountId;
     if (form.whatsappApiToken) data.whatsappApiToken = form.whatsappApiToken;
@@ -181,6 +184,19 @@ function ProfileSection() {
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Kamau's Pharmacy"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              Owner WhatsApp Number
+              <span className="ml-1 font-normal text-muted-foreground/70">(for low-stock alerts)</span>
+            </label>
+            <input
+              data-testid="input-ownerPhone"
+              value={form.ownerPhone}
+              onChange={(e) => setForm((f) => ({ ...f, ownerPhone: e.target.value }))}
+              placeholder="254712345678"
               className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>

@@ -15,6 +15,8 @@ export interface UpdateBusinessProfileRequest {
   mpesaPasskey?: string;
   mpesaConsumerKey?: string;
   mpesaConsumerSecret?: string;
+  /** Owner's WhatsApp number for restock alerts (e.g. 254712345678) */
+  ownerPhone?: string;
   currency?: string;
   timezone?: string;
   logoUrl?: string;
