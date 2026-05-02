@@ -26,6 +26,7 @@ import {
   Upload,
   FileSpreadsheet,
   CheckCircle2,
+  Check,
   X,
   Layers,
 } from "lucide-react";
@@ -876,6 +877,7 @@ function ImportCsvDialog({ onImported }: { onImported: () => void }) {
 export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -883,8 +885,11 @@ export default function InventoryPage() {
   const { data, isLoading } = useListProducts({
     search: search || undefined,
     lowStock: lowStockOnly || undefined,
+    showArchived: showArchived || undefined,
     limit: 100,
   } as Parameters<typeof useListProducts>[0]);
+
+  const archiveProduct = useUpdateProduct();
 
   const deleteProduct = useDeleteProduct({
     mutation: {
@@ -980,6 +985,19 @@ export default function InventoryPage() {
         >
           <AlertTriangle className="h-3.5 w-3.5" />
           Low Stock
+        </button>
+        <button
+          data-testid="button-filter-archived"
+          onClick={() => { setShowArchived((v) => !v); setCategoryFilter(""); }}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-2 border rounded-md text-xs font-medium transition-colors",
+            showArchived
+              ? "bg-muted border-foreground/30 text-foreground"
+              : "bg-background border-border text-muted-foreground hover:bg-muted"
+          )}
+        >
+          <X className="h-3.5 w-3.5" />
+          Archived
         </button>
       </div>
 
@@ -1091,6 +1109,34 @@ export default function InventoryPage() {
                           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
                         }
                       />
+                      <button
+                        data-testid={`button-archive-product-${product.id}`}
+                        title={product.isActive ? "Archive product" : "Restore product"}
+                        onClick={() =>
+                          archiveProduct.mutate(
+                            { id: product.id, data: { isActive: !product.isActive } },
+                            {
+                              onSuccess: () => {
+                                queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+                                toast({ title: product.isActive ? "Product archived" : "Product restored" });
+                              },
+                              onError: () => toast({ title: "Action failed", variant: "destructive" }),
+                            }
+                          )
+                        }
+                        className={cn(
+                          "p-1 rounded transition-colors",
+                          product.isActive
+                            ? "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
+                            : "text-green-600 hover:bg-green-50"
+                        )}
+                      >
+                        {product.isActive ? (
+                          <X className="h-3.5 w-3.5" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                       <button
                         data-testid={`button-delete-product-${product.id}`}
                         onClick={() => deleteProduct.mutate({ id: product.id })}

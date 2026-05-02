@@ -55,20 +55,27 @@ router.get("/products", async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { search, lowStock, page = 1, limit = 100 } = parsed.data;
+  const { search, lowStock, showArchived, page = 1, limit = 100 } = parsed.data;
+
+  const buildWhere = () => {
+    const conditions = [];
+    if (!showArchived) conditions.push(eq(productsTable.isActive, true));
+    if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
+    return conditions.length > 0 ? and(...conditions) : undefined;
+  };
 
   const [baseProducts, stockByProduct, [{ total }]] = await Promise.all([
     db
       .select()
       .from(productsTable)
-      .where(search ? ilike(productsTable.name, `%${search}%`) : undefined)
+      .where(buildWhere())
       .limit(limit)
       .offset((page - 1) * limit),
     getStockByProduct(),
     db
       .select({ total: count() })
       .from(productsTable)
-      .where(search ? ilike(productsTable.name, `%${search}%`) : undefined),
+      .where(buildWhere()),
   ]);
 
   let products = baseProducts.map((p) => ({

@@ -9,6 +9,7 @@ import {
   paymentsTable,
   whatsappMessagesTable,
   businessesTable,
+  staffTable,
 } from "@workspace/db";
 import { eq, desc, and, gte, lte, sql, count, sum } from "drizzle-orm";
 import {
@@ -82,7 +83,7 @@ router.post("/orders", async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { customerId, items, notes, loyaltyDiscount } = parsed.data;
+  const { customerId, items, notes, loyaltyDiscount, deliveryAddress, deliveryFee } = parsed.data;
 
   // Validate loyalty discount against customer's points
   if (loyaltyDiscount && loyaltyDiscount > 0) {
@@ -151,13 +152,18 @@ router.post("/orders", async (req, res) => {
   const discountKes = loyaltyDiscount ?? 0;
   const finalAmount = Math.max(0, totalAmount - discountKes);
 
+  const deliveryFeeKes = deliveryFee ?? 0;
+  const finalAmountWithDelivery = finalAmount + deliveryFeeKes;
+
   const [order] = await db
     .insert(ordersTable)
     .values({
       businessId: 1,
       customerId,
-      totalAmount: String(finalAmount),
+      totalAmount: String(finalAmountWithDelivery),
       notes: notes ?? (discountKes > 0 ? `Loyalty discount applied: KES ${discountKes} (${discountKes} pts)` : undefined),
+      deliveryAddress: deliveryAddress ?? null,
+      deliveryFee: deliveryFeeKes > 0 ? String(deliveryFeeKes) : null,
       status: "pending",
     })
     .returning();
@@ -258,7 +264,7 @@ router.get("/orders/:id", async (req, res) => {
     return;
   }
 
-  const [items, [customer], [payment]] = await Promise.all([
+  const [items, [customer], [payment], [assignedStaff]] = await Promise.all([
     db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id)),
     db
       .select()
@@ -271,9 +277,16 @@ router.get("/orders/:id", async (req, res) => {
       .where(eq(paymentsTable.orderId, id))
       .orderBy(desc(paymentsTable.createdAt))
       .limit(1),
+    order.assignedToId
+      ? db
+          .select({ id: staffTable.id, name: staffTable.name, role: staffTable.role })
+          .from(staffTable)
+          .where(eq(staffTable.id, order.assignedToId))
+          .limit(1)
+      : Promise.resolve([undefined]),
   ]);
 
-  res.json({ ...order, items, customer, payment: payment ?? null });
+  res.json({ ...order, items, customer, payment: payment ?? null, assignedStaff: assignedStaff ?? null });
 });
 
 router.patch("/orders/:id", async (req, res) => {
@@ -303,6 +316,7 @@ router.patch("/orders/:id", async (req, res) => {
   const setClause: Record<string, unknown> = { updatedAt: new Date() };
   if (status !== undefined) setClause.status = status;
   if (notes !== undefined) setClause.notes = notes;
+  if ("assignedToId" in bodyParsed.data) setClause.assignedToId = bodyParsed.data.assignedToId ?? null;
 
   const [updated] = await db
     .update(ordersTable)

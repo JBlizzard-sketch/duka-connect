@@ -55,6 +55,8 @@ export default function NewOrderDialog({
   const [items, setItems] = useState<LineItem[]>([]);
   const [notes, setNotes] = useState("");
   const [redeemPoints, setRedeemPoints] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState("");
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -101,7 +103,8 @@ export default function NewOrderDialog({
   const availablePoints = selectedCustomer?.loyaltyPoints ?? 0;
   const maxRedeemable = Math.min(availablePoints, Math.floor(subtotal / 100) * 100);
   const loyaltyDiscount = redeemPoints && maxRedeemable > 0 ? maxRedeemable : 0;
-  const total = Math.max(0, subtotal - loyaltyDiscount);
+  const deliveryFeeNum = deliveryFee ? Number(deliveryFee) : 0;
+  const total = Math.max(0, subtotal - loyaltyDiscount) + deliveryFeeNum;
 
   useEffect(() => {
     if (open && initialCustomerId) {
@@ -118,6 +121,8 @@ export default function NewOrderDialog({
     setItems([]);
     setNotes("");
     setRedeemPoints(false);
+    setDeliveryAddress("");
+    setDeliveryFee("");
     onClose();
   }
 
@@ -163,6 +168,8 @@ export default function NewOrderDialog({
         })),
         notes: notes || undefined,
         loyaltyDiscount: loyaltyDiscount > 0 ? loyaltyDiscount : undefined,
+        deliveryAddress: deliveryAddress || undefined,
+        deliveryFee: deliveryFee ? Number(deliveryFee) : undefined,
       },
     });
   }
@@ -469,6 +476,37 @@ export default function NewOrderDialog({
                 </div>
               </div>
 
+              {/* Delivery */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                  Delivery (optional)
+                </label>
+                <input
+                  type="text"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  placeholder="Delivery address…"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground shrink-0">Fee (KES)</span>
+                  <input
+                    type="number"
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                    placeholder="0"
+                    min={0}
+                    className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                </div>
+                {deliveryFee && Number(deliveryFee) > 0 && (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Delivery fee</span>
+                    <span>+ {formatCurrency(Number(deliveryFee))}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Notes */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
@@ -477,7 +515,7 @@ export default function NewOrderDialog({
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Delivery address, special instructions…"
+                  placeholder="Special instructions…"
                   rows={2}
                   className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />

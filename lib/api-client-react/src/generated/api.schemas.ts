@@ -96,6 +96,8 @@ export interface Order {
   currency: string;
   rawMessage?: string | null;
   notes?: string | null;
+  deliveryAddress?: string | null;
+  deliveryFee?: number | null;
   assignedToId?: number | null;
   createdAt: string;
   updatedAt: string;
@@ -171,11 +173,14 @@ export interface CreateOrderRequest {
   notes?: string;
   /** Points to redeem as discount (100 pts = KES 100 off) */
   loyaltyDiscount?: number;
+  deliveryAddress?: string;
+  deliveryFee?: number;
 }
 
 export interface UpdateOrderStatusRequest {
   status?: OrderStatus;
   notes?: string | null;
+  assignedToId?: number | null;
 }
 
 export interface ProductVariant {
@@ -430,6 +435,7 @@ export type ListOrdersParams = {
 export type ListProductsParams = {
   search?: string;
   lowStock?: boolean;
+  showArchived?: boolean;
   page?: number;
   limit?: number;
 };

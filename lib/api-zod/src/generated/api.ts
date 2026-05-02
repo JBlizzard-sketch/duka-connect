@@ -131,6 +131,8 @@ export const CreateOrderBody = zod.object({
     .number()
     .optional()
     .describe("Points to redeem as discount (100 pts = KES 100 off)"),
+  deliveryAddress: zod.string().optional(),
+  deliveryFee: zod.number().optional(),
 });
 
 /**
@@ -236,6 +238,7 @@ export const UpdateOrderStatusBody = zod.object({
     ])
     .optional(),
   notes: zod.string().nullish(),
+  assignedToId: zod.number().int().nullable().optional(),
 });
 
 export const updateOrderStatusResponseCurrencyDefault = `KES`;
@@ -283,6 +286,7 @@ export const listProductsQueryLimitDefault = 100;
 export const ListProductsQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   lowStock: zod.coerce.boolean().optional(),
+  showArchived: zod.coerce.boolean().optional(),
   page: zod.coerce.number().default(listProductsQueryPageDefault),
   limit: zod.coerce.number().default(listProductsQueryLimitDefault),
 });

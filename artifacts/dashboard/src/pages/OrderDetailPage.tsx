@@ -1,5 +1,5 @@
 import { useRoute, Link } from "wouter";
-import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
+import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, useListStaff, getGetOrderQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
@@ -39,6 +39,9 @@ export default function OrderDetailPage() {
   const [showMpesaForm, setShowMpesaForm] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState("");
+  const [assignedToId, setAssignedToId] = useState<number | null | undefined>(undefined);
+
+  const { data: staffData } = useListStaff();
 
   const { data: order, isLoading } = useGetOrder(id, {
     query: { enabled: !!id, queryKey: getGetOrderQueryKey(id) },
@@ -447,6 +450,60 @@ export default function OrderDetailPage() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No payment recorded yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delivery */}
+      {(order.deliveryAddress || order.deliveryFee) && (
+        <Card data-print-hide>
+          <CardHeader className="px-4 pt-4 pb-2">
+            <CardTitle className="text-sm font-semibold">Delivery</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-1 text-sm">
+            {order.deliveryAddress && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground shrink-0">Address</span>
+                <span className="text-right">{order.deliveryAddress}</span>
+              </div>
+            )}
+            {order.deliveryFee && Number(order.deliveryFee) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Delivery fee</span>
+                <span className="font-medium">{formatCurrency(Number(order.deliveryFee))}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Staff assignment */}
+      <Card data-print-hide>
+        <CardHeader className="px-4 pt-4 pb-2">
+          <CardTitle className="text-sm font-semibold">Assign Staff</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="flex items-center gap-2">
+            <select
+              value={assignedToId !== undefined ? (assignedToId ?? "") : (order.assignedToId ?? "")}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                setAssignedToId(val);
+                updateStatus.mutate({ id, data: { assignedToId: val } });
+              }}
+              className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">— Unassigned —</option>
+              {(staffData?.staff ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+              ))}
+            </select>
+            {updateStatus.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          </div>
+          {(assignedToId !== undefined ? assignedToId : order.assignedToId) && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Assigned to {(staffData?.staff ?? []).find((s) => s.id === (assignedToId !== undefined ? assignedToId : order.assignedToId))?.name ?? "staff member"}
+            </p>
           )}
         </CardContent>
       </Card>
