@@ -407,28 +407,29 @@ export default function AnalyticsPage() {
             ) : (
               <div className="divide-y divide-border">
                 {topCustomers.customers.map((c, i) => (
-                  <div
-                    key={c.id}
-                    data-testid={`row-customer-${c.id}`}
-                    className="flex items-center justify-between py-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium truncate">
-                          {c.name || formatPhone(c.whatsappPhone)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {c.totalOrders} orders
-                        </p>
+                  <Link key={c.id} href={`/customers?customerId=${c.id}`}>
+                    <div
+                      data-testid={`row-customer-${c.id}`}
+                      className="flex items-center justify-between py-2 hover:bg-muted/40 -mx-1 px-1 rounded transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">
+                            {c.name || formatPhone(c.whatsappPhone)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {c.totalOrders} orders
+                          </p>
+                        </div>
                       </div>
+                      <span className="text-xs font-semibold text-primary shrink-0 ml-3">
+                        {formatCurrency(Number(c.totalSpend))}
+                      </span>
                     </div>
-                    <span className="text-xs font-semibold text-primary shrink-0 ml-3">
-                      {formatCurrency(Number(c.totalSpend))}
-                    </span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

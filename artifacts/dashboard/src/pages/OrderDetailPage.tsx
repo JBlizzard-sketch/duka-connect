@@ -1,12 +1,15 @@
 import { useRoute, Link } from "wouter";
 import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send } from "lucide-react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const NEXT_STATUSES: Record<string, string[]> = {
   pending: ["confirmed", "cancelled"],
@@ -61,6 +64,29 @@ export default function OrderDetailPage() {
       },
       onError: () => toast({ title: "Save failed", variant: "destructive" }),
     },
+  });
+
+  const sendPaymentRequest = useMutation({
+    mutationFn: async () => {
+      if (!order?.customer?.id) throw new Error("No customer");
+      const amount = Math.round(Number(order.totalAmount));
+      const text =
+        `💳 *Ombi la Malipo — Agiza #${order.id}*\n\n` +
+        `Jumla: *KES ${amount.toLocaleString()}*\n\n` +
+        `Tafadhali lipa kwa *Mpesa*:\n` +
+        `📱 Ref: ORDER${order.id}\n` +
+        `Kiasi: KES ${amount.toLocaleString()}\n\n` +
+        `Asante kwa ununuzi wako! 🙏`;
+      const r = await fetch(`${BASE}/api/messages/thread/${order.customer.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) throw new Error("Send failed");
+      return r.json();
+    },
+    onSuccess: () => toast({ title: "Payment request sent on WhatsApp" }),
+    onError: () => toast({ title: "Failed to send payment request", variant: "destructive" }),
   });
 
   const initiatePayment = useInitiatePayment({
@@ -185,7 +211,7 @@ export default function OrderDetailPage() {
                   <span>{order.customer.loyaltyPoints} pts</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0 mt-0.5">
+              <div className="flex items-center gap-2 shrink-0 mt-0.5 flex-wrap justify-end">
                 <a
                   href={`https://wa.me/${order.customer.whatsappPhone}`}
                   target="_blank"
@@ -202,6 +228,21 @@ export default function OrderDetailPage() {
                     Message
                   </button>
                 </Link>
+                {["pending", "confirmed", "preparing"].includes(order.status) && (
+                  <button
+                    onClick={() => sendPaymentRequest.mutate()}
+                    disabled={sendPaymentRequest.isPending}
+                    className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                    title="Send Mpesa payment request via WhatsApp"
+                  >
+                    {sendPaymentRequest.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    Pay Request
+                  </button>
+                )}
               </div>
             </div>
           </CardContent>

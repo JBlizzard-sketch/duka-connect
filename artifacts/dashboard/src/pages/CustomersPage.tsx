@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListCustomers,
@@ -409,9 +409,17 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const initId = useMemo(() => {
+    const p = new URLSearchParams(
+      typeof window !== "undefined" ? window.location.search : ""
+    );
+    const v = p.get("customerId");
+    return v ? Number(v) : null;
+  }, []);
+  const [selectedId, setSelectedId] = useState<number | null>(initId);
 
   const { data, isLoading } = useListCustomers({
     search: search || undefined,

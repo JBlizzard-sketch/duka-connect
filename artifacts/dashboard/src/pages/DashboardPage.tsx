@@ -24,15 +24,17 @@ function StatCard({
   subtitle,
   icon: Icon,
   accent = false,
+  href,
 }: {
   title: string;
   value: string;
   subtitle?: string;
   icon: React.ElementType;
   accent?: boolean;
+  href?: string;
 }) {
-  return (
-    <Card className={accent ? "border-primary/30 bg-primary/5" : ""}>
+  const inner = (
+    <Card className={`${accent ? "border-primary/30 bg-primary/5" : ""} ${href ? "hover:shadow-md transition-shadow cursor-pointer" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
@@ -60,6 +62,7 @@ function StatCard({
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 function DailyReportButton() {
@@ -277,24 +280,28 @@ export default function DashboardPage() {
               subtitle={`${summary?.todayOrders ?? 0} orders`}
               icon={TrendingUp}
               accent
+              href="/orders"
             />
             <StatCard
               title="Pending Orders"
               value={String(summary?.pendingOrders ?? 0)}
               subtitle="Need attention"
               icon={Clock}
+              href="/orders?status=pending"
             />
             <StatCard
               title="Week Revenue"
               value={formatCurrency(summary?.weekRevenue ?? 0)}
               subtitle={`${summary?.weekOrders ?? 0} orders`}
               icon={TrendingUp}
+              href="/analytics"
             />
             <StatCard
               title="Low Stock"
               value={String(lowStock?.products?.length ?? 0)}
               subtitle="Items to restock"
               icon={AlertTriangle}
+              href="/inventory"
             />
           </>
         )}
