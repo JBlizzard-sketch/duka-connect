@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQuery
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -105,7 +105,7 @@ export default function OrderDetailPage() {
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" data-print-hide>
         <Link href="/orders">
           <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
             <ArrowLeft className="h-4 w-4" />
@@ -118,11 +118,25 @@ export default function OrderDetailPage() {
           </div>
           <p className="text-xs text-muted-foreground">{formatDateTime(order.createdAt)}</p>
         </div>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors"
+          title="Print order receipt"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Print
+        </button>
+      </div>
+
+      {/* Print-only receipt header */}
+      <div className="hidden print-only border-b border-gray-300 pb-3 mb-2">
+        <h1 className="text-xl font-bold">Order Receipt — #{order.id}</h1>
+        <p className="text-sm text-gray-500">{formatDateTime(order.createdAt)} · Status: {order.status.toUpperCase()}</p>
       </div>
 
       {/* Status actions */}
       {nextStatuses.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap" data-print-hide>
           {nextStatuses.map((s) => (
             <button
               key={s}

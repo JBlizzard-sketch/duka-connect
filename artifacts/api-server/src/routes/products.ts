@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { productsTable, productVariantsTable } from "@workspace/db";
-import { eq, ilike, and, lte, sql, count } from "drizzle-orm";
+import { eq, ilike, and, lte, sql, count, desc } from "drizzle-orm";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -271,6 +271,66 @@ router.patch("/products/:id/variants/:variantId", async (req, res) => {
     return;
   }
   res.json(updated);
+});
+
+// POST /api/products/import
+// Bulk-create products from a parsed CSV payload.
+router.post("/products/import", async (req, res) => {
+  const items = req.body?.products;
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "products array is required" });
+    return;
+  }
+
+  let created = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const item of items as Record<string, unknown>[]) {
+    const name = String(item.name ?? "").trim();
+    const basePriceRaw = parseFloat(String(item.basePrice ?? item.price ?? "0"));
+    const unit = String(item.unit ?? "unit").trim() || "unit";
+    const stockQuantity = Math.max(0, parseInt(String(item.stockQuantity ?? item.stock ?? "0"), 10) || 0);
+    const lowStockThreshold = Math.max(1, parseInt(String(item.lowStockThreshold ?? item.threshold ?? "5"), 10) || 5);
+    const category = String(item.category ?? "").trim() || null;
+
+    if (!name || isNaN(basePriceRaw) || basePriceRaw < 0) {
+      errors.push(`Row skipped: "${name || "(no name)"}" — missing or invalid name/price`);
+      skipped++;
+      continue;
+    }
+
+    try {
+      const [product] = await db
+        .insert(productsTable)
+        .values({
+          businessId: 1,
+          name,
+          category,
+          basePrice: String(basePriceRaw),
+          unit,
+          isActive: true,
+        })
+        .returning();
+
+      await db.insert(productVariantsTable).values({
+        productId: product.id,
+        name: "Default",
+        price: String(basePriceRaw),
+        stockQuantity: String(stockQuantity),
+        lowStockThreshold: String(lowStockThreshold),
+        unit,
+      });
+
+      created++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      errors.push(`Failed: "${name}" — ${msg}`);
+      skipped++;
+    }
+  }
+
+  res.json({ created, skipped, errors });
 });
 
 export default router;

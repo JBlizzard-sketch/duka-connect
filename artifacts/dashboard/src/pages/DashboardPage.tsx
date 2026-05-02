@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { useGetOrdersSummary, useGetLowStockProducts, useListOrders } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight } from "lucide-react";
+import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
 import NewOrderDialog from "@/components/NewOrderDialog";
+import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function StatCard({
   title,
@@ -51,6 +55,76 @@ function StatCard({
   );
 }
 
+function DailyReportButton() {
+  const { toast } = useToast();
+  const [showReport, setShowReport] = useState<string | null>(null);
+
+  const reportMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/daily-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!r.ok) throw new Error("Failed to generate report");
+      return r.json() as Promise<{ message: string; sent: boolean; ownerPhone: string | null }>;
+    },
+    onSuccess: (data) => {
+      setShowReport(data.message);
+      if (data.sent) {
+        toast({ title: "Report sent to WhatsApp", description: data.ownerPhone ?? undefined });
+      } else {
+        toast({ title: "Report generated", description: "Set owner WhatsApp number in Settings to send automatically" });
+      }
+    },
+    onError: () => toast({ title: "Failed to generate report", variant: "destructive" }),
+  });
+
+  return (
+    <>
+      <button
+        onClick={() => reportMutation.mutate()}
+        disabled={reportMutation.isPending}
+        className="inline-flex items-center gap-2 border border-border bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-60"
+        title="Send daily summary to your WhatsApp"
+      >
+        {reportMutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <BarChart2 className="h-4 w-4" />
+        )}
+        Daily Report
+      </button>
+
+      {showReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowReport(null)}>
+          <div
+            className="bg-background border border-border rounded-xl shadow-xl w-full max-w-sm p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                Report Preview
+              </div>
+              <button onClick={() => setShowReport(null)} className="text-muted-foreground hover:text-foreground">
+                ✕
+              </button>
+            </div>
+            <pre className="text-xs text-foreground bg-muted rounded-lg p-3 whitespace-pre-wrap leading-relaxed font-mono max-h-80 overflow-y-auto">
+              {showReport}
+            </pre>
+            <p className="text-[11px] text-muted-foreground">
+              {reportMutation.data?.sent
+                ? `Sent to ${reportMutation.data.ownerPhone}`
+                : "Configure owner WhatsApp in Settings → will be sent automatically"}
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function DashboardPage() {
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const { data: summary, isLoading: summaryLoading } = useGetOrdersSummary({
@@ -80,14 +154,17 @@ export default function DashboardPage() {
             })}
           </p>
         </div>
-        <button
-          data-testid="button-new-order"
-          onClick={() => setNewOrderOpen(true)}
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <ShoppingCart className="h-4 w-4" />
-          New Order
-        </button>
+        <div className="flex items-center gap-2">
+          <DailyReportButton />
+          <button
+            data-testid="button-new-order"
+            onClick={() => setNewOrderOpen(true)}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            New Order
+          </button>
+        </div>
       </div>
 
       {/* Stats grid */}

@@ -3,6 +3,23 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+@media print {
+  [data-print-hide],
+  aside,
+  header {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  main {
+    overflow: visible !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

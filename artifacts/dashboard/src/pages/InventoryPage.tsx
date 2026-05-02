@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useListProducts,
   useCreateProduct,
@@ -9,8 +9,9 @@ import {
   getListProductsQueryKey,
   getGetProductQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format";
+
 import {
   Search,
   Plus,
@@ -21,7 +22,13 @@ import {
   Pencil,
   Minus,
   Edit2,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  X,
 } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -370,6 +377,198 @@ function StockAdjustDialog({
   );
 }
 
+type CsvRow = { name: string; category: string; basePrice: string; unit: string; stockQuantity: string; lowStockThreshold: string };
+
+function parseCsv(text: string): CsvRow[] {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/\s+/g, ""));
+  const headerMap: Record<string, string> = {
+    name: "name", productname: "name",
+    category: "category", cat: "category",
+    baseprice: "basePrice", price: "basePrice",
+    unit: "unit",
+    stockquantity: "stockQuantity", stock: "stockQuantity", qty: "stockQuantity",
+    lowstockthreshold: "lowStockThreshold", threshold: "lowStockThreshold", minstock: "lowStockThreshold",
+  };
+  return lines.slice(1).map((line) => {
+    const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      const mapped = headerMap[h] ?? h;
+      row[mapped] = vals[i] ?? "";
+    });
+    return row as CsvRow;
+  }).filter((r) => r.name);
+}
+
+function ImportCsvDialog({ onImported }: { onImported: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<CsvRow[]>([]);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const importMutation = useMutation({
+    mutationFn: async (products: CsvRow[]) => {
+      const r = await fetch(`${BASE}/api/products/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products }),
+      });
+      if (!r.ok) throw new Error("Import failed");
+      return r.json() as Promise<{ created: number; skipped: number; errors: string[] }>;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      onImported();
+      toast({ title: `Imported ${data.created} product${data.created === 1 ? "" : "s"}` });
+    },
+    onError: () => toast({ title: "Import failed", variant: "destructive" }),
+  });
+
+  function handleFile(file: File) {
+    setFileName(file.name);
+    setResult(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setRows(parseCsv(text));
+    };
+    reader.readAsText(file);
+  }
+
+  function reset() {
+    setRows([]);
+    setFileName(null);
+    setResult(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <button className="inline-flex items-center gap-1.5 border border-border text-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-muted transition-colors">
+          <Upload className="h-4 w-4" />
+          Import CSV
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4 text-primary" />
+            Bulk Import Products
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
+          {/* Format hint */}
+          <div className="bg-muted rounded-lg p-3 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">CSV column headers (flexible):</p>
+            <p><span className="font-mono bg-background px-1 rounded">name</span> · <span className="font-mono bg-background px-1 rounded">basePrice</span> · <span className="font-mono bg-background px-1 rounded">unit</span> · <span className="font-mono bg-background px-1 rounded">category</span> · <span className="font-mono bg-background px-1 rounded">stockQuantity</span> · <span className="font-mono bg-background px-1 rounded">lowStockThreshold</span></p>
+            <p className="text-[11px]">Example: <span className="font-mono">Uji,Breakfast,45,500g,100,20</span></p>
+          </div>
+
+          {/* Drop / pick zone */}
+          {!rows.length && !result && (
+            <div
+              className="border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center py-10 gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/40 transition-colors"
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+            >
+              <Upload className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Click to select or drag & drop a CSV file</p>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              />
+            </div>
+          )}
+
+          {/* Preview table */}
+          {rows.length > 0 && !result && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">{fileName} — <span className="text-muted-foreground">{rows.length} rows detected</span></p>
+                <button onClick={reset} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                  <X className="h-3 w-3" /> Clear
+                </button>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted text-muted-foreground">
+                      {["Name", "Category", "Price (KES)", "Unit", "Stock", "Min Stock"].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.slice(0, 8).map((row, i) => (
+                      <tr key={i} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium">{row.name || <span className="text-red-500">—</span>}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{row.category || "—"}</td>
+                        <td className="px-3 py-2">{row.basePrice || <span className="text-red-500">—</span>}</td>
+                        <td className="px-3 py-2">{row.unit || "unit"}</td>
+                        <td className="px-3 py-2">{row.stockQuantity || "0"}</td>
+                        <td className="px-3 py-2">{row.lowStockThreshold || "5"}</td>
+                      </tr>
+                    ))}
+                    {rows.length > 8 && (
+                      <tr className="border-t border-border bg-muted">
+                        <td colSpan={6} className="px-3 py-2 text-xs text-muted-foreground text-center">
+                          ...and {rows.length - 8} more rows
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                disabled={importMutation.isPending}
+                onClick={() => importMutation.mutate(rows)}
+                className="w-full py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+              >
+                {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {importMutation.isPending ? "Importing…" : `Import ${rows.length} Products`}
+              </button>
+            </div>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <CheckCircle2 className="h-4 w-4" />
+                Import complete: {result.created} created, {result.skipped} skipped
+              </div>
+              {result.errors.length > 0 && (
+                <div className="bg-muted rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Skipped rows:</p>
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600">{e}</p>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => { reset(); setOpen(false); }}
+                className="w-full py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
@@ -398,11 +597,18 @@ export default function InventoryPage() {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Inventory</h1>
-        <AddProductDialog
-          onCreated={() =>
-            queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
-          }
-        />
+        <div className="flex items-center gap-2">
+          <ImportCsvDialog
+            onImported={() =>
+              queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+            }
+          />
+          <AddProductDialog
+            onCreated={() =>
+              queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+            }
+          />
+        </div>
       </div>
 
       {/* Search & filters */}

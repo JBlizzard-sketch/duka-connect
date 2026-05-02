@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, orderItemsTable, productsTable } from "@workspace/db";
+import { ordersTable, orderItemsTable, productsTable, productVariantsTable, businessesTable } from "@workspace/db";
 import { eq, gte, sql, count, sum, desc, and } from "drizzle-orm";
 import {
   GetAnalyticsSummaryQueryParams,
   GetTopProductsQueryParams,
   GetRevenueByHourQueryParams,
 } from "@workspace/api-zod";
+import { sendTextMessage } from "../lib/whatsapp";
 
 const router = Router();
 
@@ -206,6 +207,90 @@ router.get("/analytics/revenue-by-hour", async (req, res) => {
   }));
 
   res.json({ data, period });
+});
+
+// POST /api/analytics/daily-report
+// Formats today's performance summary and sends it to the owner's WhatsApp.
+router.post("/analytics/daily-report", async (req, res) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [todayStats, lowStockItems, [business]] = await Promise.all([
+    db
+      .select({
+        totalOrders: count(),
+        revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
+        pending: sql<number>`count(*) filter (where ${ordersTable.status} = 'pending')::int`,
+        confirmed: sql<number>`count(*) filter (where ${ordersTable.status} = 'confirmed')::int`,
+        delivered: sql<number>`count(*) filter (where ${ordersTable.status} = 'delivered')::int`,
+      })
+      .from(ordersTable)
+      .where(gte(ordersTable.createdAt, today)),
+    db
+      .select({
+        productName: productsTable.name,
+        variantName: productVariantsTable.name,
+        stock: productVariantsTable.stockQuantity,
+      })
+      .from(productVariantsTable)
+      .innerJoin(productsTable, eq(productVariantsTable.productId, productsTable.id))
+      .where(
+        sql`cast(${productVariantsTable.stockQuantity} as numeric) <= cast(${productVariantsTable.lowStockThreshold} as numeric)`
+      )
+      .limit(10),
+    db.select().from(businessesTable).limit(1),
+  ]);
+
+  const stats = todayStats[0];
+  const ownerPhone = business?.ownerPhone;
+  const businessName = business?.name ?? "Duka";
+
+  const dateStr = new Date().toLocaleDateString("en-KE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  const lines: string[] = [
+    `📊 *Daily Report — ${dateStr}*`,
+    `_${businessName}_`,
+    ``,
+    `📦 *Orders Today:* ${Number(stats?.totalOrders ?? 0)}`,
+    `💰 *Revenue:* KES ${Math.round(Number(stats?.revenue ?? 0)).toLocaleString()}`,
+    `⏳ *Pending:* ${Number(stats?.pending ?? 0)}`,
+    `✅ *Confirmed:* ${Number(stats?.confirmed ?? 0)}`,
+    `🚚 *Delivered:* ${Number(stats?.delivered ?? 0)}`,
+  ];
+
+  if (lowStockItems.length > 0) {
+    lines.push(``);
+    lines.push(`⚠️ *Low Stock (${lowStockItems.length} item${lowStockItems.length === 1 ? "" : "s"}):*`);
+    lowStockItems.slice(0, 6).forEach((item) => {
+      const label = item.variantName !== "Default" && item.variantName
+        ? `${item.productName} — ${item.variantName}`
+        : item.productName;
+      lines.push(`  • ${label}: *${Number(item.stock)} left*`);
+    });
+    if (lowStockItems.length > 6) {
+      lines.push(`  _...and ${lowStockItems.length - 6} more_`);
+    }
+  } else {
+    lines.push(``);
+    lines.push(`✅ *No low-stock items*`);
+  }
+
+  lines.push(``);
+  lines.push(`_Sent from Duka · ${new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}_`);
+
+  const message = lines.join("\n");
+
+  let sent = false;
+  if (ownerPhone) {
+    const result = await sendTextMessage(ownerPhone, message);
+    sent = result.success;
+  }
+
+  res.json({ message, sent, ownerPhone: ownerPhone ?? null });
 });
 
 export default router;
