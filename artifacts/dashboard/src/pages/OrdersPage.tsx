@@ -3,12 +3,13 @@ import { useListOrders, useUpdateOrderStatus, getListOrdersQueryKey, getGetOrder
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Download, Calendar, Loader2 } from "lucide-react";
+import { ChevronRight, Search, Download, Calendar, Loader2, ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import NewOrderDialog from "@/components/NewOrderDialog";
 
 const NEXT_STATUS: Record<string, string> = {
   pending: "confirmed",
@@ -66,6 +67,7 @@ export default function OrdersPage() {
   const [dateFilter, setDateFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -153,8 +155,16 @@ export default function OrdersPage() {
               Export CSV
             </button>
           )}
+          <button
+            onClick={() => setNewOrderOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            New Order
+          </button>
         </div>
       </div>
+      <NewOrderDialog open={newOrderOpen} onOpenChange={setNewOrderOpen} />
 
       {/* Search */}
       <div className="relative max-w-sm">

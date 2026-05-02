@@ -16,7 +16,8 @@ function getLoyaltyTier(points: number): { label: string; className: string } | 
   if (points < 500) return { label: "Silver", className: "text-slate-600 bg-slate-100 border-slate-200" };
   return { label: "Gold ⭐", className: "text-yellow-700 bg-yellow-100 border-yellow-200" };
 }
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink, ShoppingCart } from "lucide-react";
+import NewOrderDialog from "@/components/NewOrderDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,6 +145,7 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
   const [nameInput, setNameInput] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState("");
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -277,8 +279,21 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
                   Message
                 </Link>
               </Button>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setNewOrderOpen(true)}
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                New Order
+              </Button>
             </div>
           </div>
+          <NewOrderDialog
+            open={newOrderOpen}
+            onOpenChange={setNewOrderOpen}
+            initialCustomerId={customer.id}
+          />
 
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-muted rounded-lg p-3 text-center">

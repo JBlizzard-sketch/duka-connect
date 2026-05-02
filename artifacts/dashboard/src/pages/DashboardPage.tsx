@@ -4,19 +4,42 @@ import {
   useGetLowStockProducts,
   useListOrders,
   useUpdateOrderStatus,
+  useGetAnalyticsSummary,
   getListOrdersQueryKey,
   getGetOrdersSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { ShoppingCart, TrendingUp, TrendingDown, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2, ArrowRight, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
 import NewOrderDialog from "@/components/NewOrderDialog";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function TrendBadge({ change }: { change?: number | null }) {
+  if (change == null) return null;
+  if (Math.abs(change) < 0.5) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground mt-1">
+        <Minus className="h-3 w-3" /> No change
+      </span>
+    );
+  }
+  const up = change > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-xs mt-1 font-medium ${
+        up ? "text-green-600" : "text-red-500"
+      }`}
+    >
+      {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+      {up ? "+" : ""}{change.toFixed(1)}% vs prev period
+    </span>
+  );
+}
 
 function StatCard({
   title,
@@ -25,6 +48,7 @@ function StatCard({
   icon: Icon,
   accent = false,
   href,
+  trend,
 }: {
   title: string;
   value: string;
@@ -32,6 +56,7 @@ function StatCard({
   icon: React.ElementType;
   accent?: boolean;
   href?: string;
+  trend?: number | null;
 }) {
   const inner = (
     <Card className={`${accent ? "border-primary/30 bg-primary/5" : ""} ${href ? "hover:shadow-md transition-shadow cursor-pointer" : ""}`}>
@@ -47,6 +72,7 @@ function StatCard({
             >
               {value}
             </p>
+            {trend !== undefined && <TrendBadge change={trend} />}
             {subtitle && (
               <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
             )}
@@ -232,6 +258,14 @@ export default function DashboardPage() {
     { limit: 8, page: 1 },
     { query: { refetchInterval: 20_000 } }
   );
+  const { data: todayAnalytics } = useGetAnalyticsSummary(
+    { period: "today" },
+    { query: { refetchInterval: 60_000 } }
+  );
+  const { data: weekAnalytics } = useGetAnalyticsSummary(
+    { period: "week" },
+    { query: { refetchInterval: 60_000 } }
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
@@ -281,6 +315,7 @@ export default function DashboardPage() {
               icon={TrendingUp}
               accent
               href="/orders"
+              trend={todayAnalytics?.revenueChange}
             />
             <StatCard
               title="Pending Orders"
@@ -295,6 +330,7 @@ export default function DashboardPage() {
               subtitle={`${summary?.weekOrders ?? 0} orders`}
               icon={TrendingUp}
               href="/analytics"
+              trend={weekAnalytics?.revenueChange}
             />
             <StatCard
               title="Low Stock"
