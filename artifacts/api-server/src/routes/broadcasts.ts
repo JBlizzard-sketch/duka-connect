@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { broadcastsTable, customersTable } from "@workspace/db";
-import { eq, desc, count, gte } from "drizzle-orm";
-import {
-  ListBroadcastsQueryParams,
-  CreateBroadcastBody,
-} from "@workspace/api-zod";
+import { eq, desc, count } from "drizzle-orm";
+import { ListBroadcastsQueryParams, CreateBroadcastBody } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { sendTextMessage } from "../lib/whatsapp";
+import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 
 const router = Router();
 
@@ -47,33 +46,26 @@ router.post("/broadcasts", async (req, res) => {
   }
   const { message, segment, scheduleAt } = parsed.data;
 
-  // Count recipients by segment
-  let recipientCount = 0;
   const allCustomers = await db.select().from(customersTable);
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  switch (segment) {
-    case "all":
-      recipientCount = allCustomers.length;
-      break;
-    case "recent": {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      recipientCount = allCustomers.filter(
-        (c) => c.lastOrderAt && c.lastOrderAt >= thirtyDaysAgo
-      ).length;
-      break;
+  const recipients = (() => {
+    switch (segment) {
+      case "all":
+        return allCustomers;
+      case "recent":
+        return allCustomers.filter(
+          (c) => c.lastOrderAt && c.lastOrderAt >= thirtyDaysAgo
+        );
+      case "top_customers":
+        return allCustomers.filter((c) => Number(c.totalSpend) > 5000);
+      case "loyal":
+        return allCustomers.filter((c) => c.loyaltyPoints >= 50);
+      default:
+        return allCustomers;
     }
-    case "top_customers":
-      recipientCount = allCustomers.filter(
-        (c) => Number(c.totalSpend) > 5000
-      ).length;
-      break;
-    case "loyal":
-      recipientCount = allCustomers.filter((c) => c.loyaltyPoints >= 50).length;
-      break;
-    default:
-      recipientCount = allCustomers.length;
-  }
+  })();
 
   const [broadcast] = await db
     .insert(broadcastsTable)
@@ -81,26 +73,63 @@ router.post("/broadcasts", async (req, res) => {
       businessId: 1,
       message,
       segment,
-      recipientCount,
+      recipientCount: recipients.length,
       status: scheduleAt ? "draft" : "sending",
       scheduleAt: scheduleAt ? new Date(scheduleAt) : null,
     })
     .returning();
 
-  // In a real implementation, this would queue the broadcast to BullMQ
-  // For now, mark as sent immediately if not scheduled
-  if (!scheduleAt) {
-    logger.info(
-      { broadcastId: broadcast.id, recipientCount },
-      "Broadcast queued (mock)"
+  res.status(201).json(broadcast);
+
+  // Fire-and-forget actual sending (don't block response)
+  if (!scheduleAt && recipients.length > 0) {
+    sendBroadcastMessages(broadcast.id, message, recipients).catch((err) =>
+      logger.error({ err, broadcastId: broadcast.id }, "Broadcast send failed")
     );
-    await db
-      .update(broadcastsTable)
-      .set({ status: "sent", sentCount: recipientCount, sentAt: new Date() })
-      .where(eq(broadcastsTable.id, broadcast.id));
+  }
+});
+
+async function sendBroadcastMessages(
+  broadcastId: number,
+  message: string,
+  recipients: (typeof customersTable.$inferSelect)[]
+) {
+  logger.info(
+    { broadcastId, recipientCount: recipients.length },
+    "Starting broadcast send"
+  );
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  const results = await batchProcess(
+    recipients,
+    async (customer) => {
+      const result = await sendTextMessage(customer.whatsappPhone, message);
+      return { customerId: customer.id, result };
+    },
+    { concurrency: 3, retries: 2 }
+  );
+
+  for (const outcome of results) {
+    if (outcome.result.success) sentCount++;
+    else failedCount++;
   }
 
-  res.status(201).json({ ...broadcast, status: scheduleAt ? "draft" : "sent" });
-});
+  await db
+    .update(broadcastsTable)
+    .set({
+      status: failedCount === recipients.length ? "failed" : "sent",
+      sentCount,
+      failedCount,
+      sentAt: new Date(),
+    })
+    .where(eq(broadcastsTable.id, broadcastId));
+
+  logger.info(
+    { broadcastId, sentCount, failedCount },
+    "Broadcast send complete"
+  );
+}
 
 export default router;
