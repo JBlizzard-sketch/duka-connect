@@ -44,7 +44,7 @@ function EditProductDialog({
   product,
   onUpdated,
 }: {
-  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string };
+  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string; description?: string | null; imageUrl?: string | null };
   onUpdated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -53,6 +53,8 @@ function EditProductDialog({
     category: product.category ?? "",
     basePrice: String(product.basePrice),
     unit: product.unit,
+    description: product.description ?? "",
+    imageUrl: product.imageUrl ?? "",
   });
   const { toast } = useToast();
   const updateProduct = useUpdateProduct({
@@ -73,6 +75,8 @@ function EditProductDialog({
       category: product.category ?? "",
       basePrice: String(product.basePrice),
       unit: product.unit,
+      description: product.description ?? "",
+      imageUrl: product.imageUrl ?? "",
     });
     setOpen(true);
   }
@@ -111,6 +115,34 @@ function EditProductDialog({
               />
             </div>
           ))}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Description (optional)</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Brief product description…"
+              rows={2}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Image URL (optional)</label>
+            <input
+              type="url"
+              value={form.imageUrl}
+              onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+              placeholder="https://example.com/product.jpg"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            {form.imageUrl && (
+              <img
+                src={form.imageUrl}
+                alt="Preview"
+                className="mt-2 h-16 w-16 rounded-md object-cover border border-border"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+          </div>
           <button
             disabled={!form.name || !form.basePrice || updateProduct.isPending}
             onClick={() =>
@@ -121,6 +153,8 @@ function EditProductDialog({
                   category: form.category || undefined,
                   basePrice: Number(form.basePrice),
                   unit: form.unit,
+                  description: form.description || undefined,
+                  imageUrl: form.imageUrl || undefined,
                 },
               })
             }
@@ -143,13 +177,15 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
     unit: "piece",
     initialStock: "",
     lowStockThreshold: "5",
+    description: "",
+    imageUrl: "",
   });
   const { toast } = useToast();
   const createProduct = useCreateProduct({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", category: "", basePrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5" });
+        setForm({ name: "", category: "", basePrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5", description: "", imageUrl: "" });
         onCreated();
         toast({ title: "Product added" });
       },
@@ -193,6 +229,34 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
               />
             </div>
           ))}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Description (optional)</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Brief product description…"
+              rows={2}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Image URL (optional)</label>
+            <input
+              type="url"
+              value={form.imageUrl}
+              onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+              placeholder="https://example.com/product.jpg"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            {form.imageUrl && (
+              <img
+                src={form.imageUrl}
+                alt="Preview"
+                className="mt-2 h-16 w-16 rounded-md object-cover border border-border"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+          </div>
           <button
             data-testid="button-submit-product"
             disabled={!form.name || !form.basePrice || createProduct.isPending}
@@ -205,6 +269,8 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
                   unit: form.unit,
                   initialStock: form.initialStock ? Number(form.initialStock) : undefined,
                   lowStockThreshold: form.lowStockThreshold ? Number(form.lowStockThreshold) : 5,
+                  description: form.description || undefined,
+                  imageUrl: form.imageUrl || undefined,
                 },
               })
             }
@@ -229,7 +295,7 @@ function StockAdjustDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"adjust" | "set">("adjust");
-  const [values, setValues] = useState<Record<number, string>>({});
+  const [values, setValues] = useState<Record<string | number, string>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -325,6 +391,8 @@ function StockAdjustDialog({
               const preview = !isNaN(num) && raw !== ""
                 ? mode === "adjust" ? Math.max(0, current + num) : Math.max(0, num)
                 : null;
+              const thresholdKey = `threshold_${v.id}`;
+              const thresholdRaw = values[thresholdKey] ?? "";
 
               return (
                 <div
@@ -387,6 +455,39 @@ function StockAdjustDialog({
                       className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
                       {updateVariant.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : mode === "set" ? "Set" : "Apply"}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+                    <span className="text-[11px] text-muted-foreground shrink-0">
+                      Alert at: <span className="font-medium text-foreground">{Number(v.lowStockThreshold)}</span>
+                    </span>
+                    <input
+                      type="number"
+                      value={thresholdRaw}
+                      onChange={(e) => setValues((a) => ({ ...a, [thresholdKey]: e.target.value }))}
+                      placeholder="New threshold"
+                      min={0}
+                      className="flex-1 border border-input rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button
+                      disabled={!thresholdRaw || isNaN(parseInt(thresholdRaw, 10)) || updateVariant.isPending}
+                      onClick={() => {
+                        const t = parseInt(thresholdRaw, 10);
+                        if (isNaN(t) || t < 0) return;
+                        updateVariant.mutate(
+                          { id: productId, variantId: v.id, data: { lowStockThreshold: t } },
+                          {
+                            onSuccess: () => {
+                              setValues((a) => ({ ...a, [thresholdKey]: "" }));
+                              toast({ title: `Alert threshold set to ${t}`, description: productName });
+                            },
+                          }
+                        );
+                      }}
+                      className="px-2 py-1 bg-muted text-foreground text-xs font-medium rounded-md hover:bg-muted/80 disabled:opacity-50 transition-colors shrink-0"
+                    >
+                      Set
                     </button>
                   </div>
                 </div>
@@ -758,12 +859,25 @@ export default function InventoryPage() {
                 className={cn(isLow && "border-amber-200")}
               >
                 <CardContent className="p-4">
+                  {product.imageUrl && (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-full h-28 object-cover rounded-md mb-3 border border-border"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate">{product.name}</p>
                       {product.category && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {product.category}
+                        </p>
+                      )}
+                      {(product as typeof product & { description?: string | null }).description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {(product as typeof product & { description?: string | null }).description}
                         </p>
                       )}
                     </div>
@@ -775,6 +889,8 @@ export default function InventoryPage() {
                           category: product.category,
                           basePrice: Number(product.basePrice),
                           unit: product.unit,
+                          description: (product as typeof product & { description?: string | null }).description,
+                          imageUrl: product.imageUrl,
                         }}
                         onUpdated={() =>
                           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })

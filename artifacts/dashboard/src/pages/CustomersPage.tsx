@@ -16,7 +16,7 @@ function getLoyaltyTier(points: number): { label: string; className: string } | 
   if (points < 500) return { label: "Silver", className: "text-slate-600 bg-slate-100 border-slate-200" };
   return { label: "Gold ⭐", className: "text-yellow-700 bg-yellow-100 border-yellow-200" };
 }
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink, ShoppingCart } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink, ShoppingCart, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NewOrderDialog from "@/components/NewOrderDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -481,6 +481,27 @@ export default function CustomersPage() {
     }
   }, [rawCustomers, sortBy]);
 
+  function exportCsv() {
+    const rows = customers.map((c) => [
+      c.name ?? "",
+      c.whatsappPhone,
+      c.totalOrders,
+      Number(c.totalSpend).toFixed(2),
+      c.loyaltyPoints,
+      c.lastOrderAt ? new Date(c.lastOrderAt).toISOString().slice(0, 10) : "",
+      c.createdAt ? new Date(c.createdAt).toISOString().slice(0, 10) : "",
+    ]);
+    const header = ["Name", "Phone", "Total Orders", "Total Spend (KES)", "Loyalty Points", "Last Order", "Joined"];
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
@@ -489,6 +510,15 @@ export default function CustomersPage() {
           {meta && (
             <span className="text-sm text-muted-foreground">{meta.total} total</span>
           )}
+          <button
+            onClick={exportCsv}
+            disabled={customers.length === 0}
+            className="inline-flex items-center gap-1.5 border border-input bg-background text-sm font-medium px-3 py-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+            title="Export visible customers to CSV"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
           <button
             onClick={() => setAddOpen(true)}
             className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
