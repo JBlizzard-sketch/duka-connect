@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -227,9 +227,16 @@ const QUICK_REPLIES = [
 ];
 
 export default function MessagesPage() {
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const searchStr = typeof window !== "undefined" ? window.location.search : "";
+  const initCustomerId = useMemo(() => {
+    const p = new URLSearchParams(searchStr);
+    const v = p.get("customerId");
+    return v ? Number(v) : null;
+  }, [searchStr]);
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(initCustomerId);
   const [replyText, setReplyText] = useState("");
-  const [showThread, setShowThread] = useState(false);
+  const [showThread, setShowThread] = useState(initCustomerId !== null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 

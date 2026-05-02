@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   useGetAnalyticsSummary,
   useGetTopProducts,
-  useGetRevenueByHour,
   useGetTopCustomers,
   getGetAnalyticsSummaryQueryKey,
   getGetTopProductsQueryKey,
-  getGetRevenueByHourQueryKey,
   getGetTopCustomersQueryKey,
 } from "@workspace/api-client-react";
 import { formatCurrency, formatPhone } from "@/lib/format";
 import {
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   XAxis,
@@ -18,15 +19,25 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const PERIODS = [
   { value: "today", label: "Today" },
   { value: "week", label: "7 Days" },
   { value: "month", label: "30 Days" },
 ];
+
+interface DayPoint {
+  date: string;
+  label: string;
+  orders: number;
+  revenue: number;
+}
 
 function ChangeIndicator({ change }: { change: number }) {
   if (change === 0) return <Minus className="h-3 w-3 text-muted-foreground" />;
@@ -35,6 +46,11 @@ function ChangeIndicator({ change }: { change: number }) {
   ) : (
     <TrendingDown className="h-3 w-3 text-red-500" />
   );
+}
+
+function customTooltipFormatter(value: number | string, name: string) {
+  if (name === "revenue") return [formatCurrency(Number(value)), "Revenue"];
+  return [value, "Orders"];
 }
 
 export default function AnalyticsPage() {
@@ -50,24 +66,29 @@ export default function AnalyticsPage() {
     { query: { queryKey: getGetTopProductsQueryKey({ period, limit: 8 }) } }
   );
 
-  const { data: revenueByHour } = useGetRevenueByHour(
-    { period },
-    { query: { queryKey: getGetRevenueByHourQueryKey({ period }) } }
-  );
-
   const { data: topCustomers } = useGetTopCustomers(
     { by: "spend", limit: 5 },
     { query: { queryKey: getGetTopCustomersQueryKey({ by: "spend", limit: 5 }) } }
   );
 
-  const hourData = revenueByHour?.data?.map((d) => ({
-    ...d,
-    label: `${d.hour}:00`,
-  }));
+  const { data: dailyData } = useQuery({
+    queryKey: ["analytics", "revenue-by-day", period],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/revenue-by-day?period=${period}`);
+      return r.json() as Promise<{ data: DayPoint[]; period: string }>;
+    },
+    staleTime: 60_000,
+  });
 
-  const maxRevenue = topProducts?.products?.[0]?.revenue
-    ? Number(topProducts.products[0].revenue)
-    : 1;
+  const maxRevenue = useMemo(
+    () =>
+      topProducts?.products?.[0]?.revenue
+        ? Number(topProducts.products[0].revenue)
+        : 1,
+    [topProducts]
+  );
+
+  const hasRevenueData = (dailyData?.data ?? []).some((d) => d.revenue > 0);
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
@@ -127,45 +148,117 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* Revenue by hour */}
+      {/* Revenue trend — daily area chart */}
       <Card>
-        <CardHeader className="px-4 pt-4 pb-2">
-          <CardTitle className="text-sm font-semibold">Orders by Hour</CardTitle>
+        <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold">Revenue Trend</CardTitle>
+          {hasRevenueData && (
+            <span className="text-xs text-muted-foreground">
+              {period === "today" ? "Today" : period === "week" ? "Last 7 days" : "Last 30 days"}
+            </span>
+          )}
         </CardHeader>
         <CardContent className="px-2 pb-4">
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={hourData ?? []} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                interval={3}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  fontSize: 12,
-                  backgroundColor: "hsl(var(--popover))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 6,
-                }}
-                formatter={(value, name) =>
-                  name === "revenue"
-                    ? [formatCurrency(Number(value)), "Revenue"]
-                    : [value, "Orders"]
-                }
-              />
-              <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {!hasRevenueData ? (
+            <div className="flex items-center justify-center h-44 text-sm text-muted-foreground">
+              No paid orders in this period yet
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart
+                data={dailyData?.data ?? []}
+                margin={{ top: 4, right: 12, left: -16, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={period === "month" ? 4 : 0}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))}
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 12,
+                    backgroundColor: "hsl(var(--popover))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                  }}
+                  formatter={customTooltipFormatter}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  fill="url(#revenueGrad)"
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
+
+      {/* Orders by day — bar chart */}
+      {(dailyData?.data?.some((d) => d.orders > 0) ?? false) && (
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2">
+            <CardTitle className="text-sm font-semibold">Orders by Day</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart
+                data={dailyData?.data ?? []}
+                margin={{ top: 4, right: 12, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={period === "month" ? 4 : 0}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 12,
+                    backgroundColor: "hsl(var(--popover))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 6,
+                  }}
+                  formatter={(v) => [v, "Orders"]}
+                />
+                <Bar
+                  dataKey="orders"
+                  fill="hsl(var(--secondary))"
+                  radius={[3, 3, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Top products */}
@@ -175,7 +268,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             {!topProducts?.products?.length ? (
-              <p className="text-sm text-muted-foreground">No data.</p>
+              <p className="text-sm text-muted-foreground">No sales data yet.</p>
             ) : (
               <div className="space-y-3">
                 {topProducts.products.map((p, i) => {
@@ -197,7 +290,7 @@ export default function AnalyticsPage() {
                         />
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {p.quantitySold} units sold
+                        {Number(p.quantitySold).toFixed(0)} units sold
                       </p>
                     </div>
                   );
@@ -214,7 +307,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             {!topCustomers?.customers?.length ? (
-              <p className="text-sm text-muted-foreground">No data.</p>
+              <p className="text-sm text-muted-foreground">No data yet.</p>
             ) : (
               <div className="divide-y divide-border">
                 {topCustomers.customers.map((c, i) => (
@@ -224,7 +317,7 @@ export default function AnalyticsPage() {
                     className="flex items-center justify-between py-2"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-mono text-muted-foreground w-4">
+                      <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">
                         {i + 1}
                       </span>
                       <div className="min-w-0">
@@ -236,7 +329,7 @@ export default function AnalyticsPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-semibold text-primary shrink-0">
+                    <span className="text-xs font-semibold text-primary shrink-0 ml-3">
                       {formatCurrency(Number(c.totalSpend))}
                     </span>
                   </div>

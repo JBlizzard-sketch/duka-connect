@@ -131,6 +131,47 @@ router.get("/analytics/top-products", async (req, res) => {
   res.json({ products: topProducts, period });
 });
 
+router.get("/analytics/revenue-by-day", async (req, res) => {
+  const period = (req.query["period"] as string) ?? "week";
+  const periodStart = getPeriodStart(period);
+
+  const rawData = await db
+    .select({
+      date: sql<string>`to_char(${ordersTable.createdAt} AT TIME ZONE 'Africa/Nairobi', 'YYYY-MM-DD')`,
+      orders: count(),
+      revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
+    })
+    .from(ordersTable)
+    .where(
+      and(
+        gte(ordersTable.createdAt, periodStart),
+        eq(ordersTable.status, "paid")
+      )
+    )
+    .groupBy(sql`to_char(${ordersTable.createdAt} AT TIME ZONE 'Africa/Nairobi', 'YYYY-MM-DD')`)
+    .orderBy(sql`to_char(${ordersTable.createdAt} AT TIME ZONE 'Africa/Nairobi', 'YYYY-MM-DD')`);
+
+  // Fill every calendar day in the range with 0 if no data
+  const byDate = Object.fromEntries(rawData.map((r) => [r.date, r]));
+  const days: { date: string; label: string; orders: number; revenue: number }[] = [];
+  const daysInPeriod = period === "today" ? 1 : period === "week" ? 7 : 30;
+  for (let i = daysInPeriod - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const month = d.toLocaleString("en-KE", { month: "short" });
+    const day = d.getDate();
+    days.push({
+      date: key,
+      label: daysInPeriod <= 7 ? `${month} ${day}` : `${day}`,
+      orders: Number(byDate[key]?.orders ?? 0),
+      revenue: Number(byDate[key]?.revenue ?? 0),
+    });
+  }
+
+  res.json({ data: days, period });
+});
+
 router.get("/analytics/revenue-by-hour", async (req, res) => {
   const parsed = GetRevenueByHourQueryParams.safeParse(req.query);
   if (!parsed.success) {

@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQuery
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -129,19 +129,29 @@ export default function OrderDetailPage() {
             <CardTitle className="text-sm font-semibold">Customer</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-1">
-            <p className="text-sm font-medium">{order.customer.name || "Unknown"}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Phone className="h-3 w-3" />
-              <span data-testid="text-customer-phone">
-                {formatPhone(order.customer.whatsappPhone)}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-              <span>{order.customer.totalOrders} orders total</span>
-              <span className="text-border">|</span>
-              <span>{formatCurrency(Number(order.customer.totalSpend))} spent</span>
-              <span className="text-border">|</span>
-              <span>{order.customer.loyaltyPoints} pts</span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1 min-w-0">
+                <p className="text-sm font-medium">{order.customer.name || "Unknown"}</p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Phone className="h-3 w-3" />
+                  <span data-testid="text-customer-phone">
+                    {formatPhone(order.customer.whatsappPhone)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                  <span>{order.customer.totalOrders} orders total</span>
+                  <span className="text-border">|</span>
+                  <span>{formatCurrency(Number(order.customer.totalSpend))} spent</span>
+                  <span className="text-border">|</span>
+                  <span>{order.customer.loyaltyPoints} pts</span>
+                </div>
+              </div>
+              <Link href={`/messages?customerId=${order.customer.id}`}>
+                <button className="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-lg transition-colors shrink-0 mt-0.5">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Message
+                </button>
+              </Link>
             </div>
           </CardContent>
         </Card>
