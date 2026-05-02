@@ -9,6 +9,7 @@ import webhooksRouter from "./webhooks";
 import broadcastsRouter from "./broadcasts";
 import staffRouter from "./staff";
 import businessRouter from "./business";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(analyticsRouter);
 router.use(broadcastsRouter);
 router.use(staffRouter);
 router.use(businessRouter);
+router.use(messagesRouter);
 
 export default router;

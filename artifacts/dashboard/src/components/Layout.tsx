@@ -11,12 +11,14 @@ import {
   Menu,
   X,
   Zap,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/orders", icon: ShoppingCart, label: "Orders" },
+  { href: "/messages", icon: MessageCircle, label: "Inbox" },
   { href: "/inventory", icon: Package, label: "Inventory" },
   { href: "/customers", icon: Users, label: "Customers" },
   { href: "/analytics", icon: BarChart2, label: "Analytics" },

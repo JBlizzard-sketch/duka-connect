@@ -11,6 +11,7 @@ import CustomersPage from "@/pages/CustomersPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import BroadcastsPage from "@/pages/BroadcastsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import MessagesPage from "@/pages/MessagesPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/customers" component={CustomersPage} />
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/broadcasts" component={BroadcastsPage} />
+        <Route path="/messages" component={MessagesPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
