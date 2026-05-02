@@ -6,6 +6,7 @@ import {
   useGetProduct,
   useUpdateProductVariant,
   getListProductsQueryKey,
+  getGetProductQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format";
@@ -129,7 +130,7 @@ function StockAdjustDialog({
   const queryClient = useQueryClient();
 
   const { data: product, isLoading } = useGetProduct(productId, {
-    query: { enabled: open },
+    query: { enabled: open, queryKey: getGetProductQueryKey(productId) },
   });
 
   const updateVariant = useUpdateProductVariant({

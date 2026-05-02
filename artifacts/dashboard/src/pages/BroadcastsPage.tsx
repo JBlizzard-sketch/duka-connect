@@ -18,7 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const SEGMENTS = [
+const SEGMENTS: { value: "all" | "recent" | "top_customers" | "loyal"; label: string; desc: string }[] = [
   { value: "all", label: "All Customers", desc: "Message everyone" },
   { value: "recent", label: "Recent (30 days)", desc: "Ordered in last month" },
   { value: "top_customers", label: "Top Spenders", desc: "Over KES 5,000 spent" },
@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
 function NewBroadcastDialog() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [segment, setSegment] = useState("all");
+  const [segment, setSegment] = useState<"all" | "recent" | "top_customers" | "loyal">("all");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 

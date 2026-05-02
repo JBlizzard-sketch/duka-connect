@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useGetOrdersSummary, useGetLowStockProducts, useListOrders } from "@workspace/api-client-react";
 import { formatCurrency, formatTimeAgo } from "@/lib/format";
 import { Link } from "wouter";
 import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
+import NewOrderDialog from "@/components/NewOrderDialog";
 
 function StatCard({
   title,
@@ -50,6 +52,7 @@ function StatCard({
 }
 
 export default function DashboardPage() {
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
   const { data: summary, isLoading: summaryLoading } = useGetOrdersSummary();
   const { data: lowStock } = useGetLowStockProducts();
   const { data: recentOrders, isLoading: ordersLoading } = useListOrders({
@@ -59,6 +62,8 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+      <NewOrderDialog open={newOrderOpen} onClose={() => setNewOrderOpen(false)} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -71,15 +76,14 @@ export default function DashboardPage() {
             })}
           </p>
         </div>
-        <Link href="/orders">
-          <button
-            data-testid="button-new-order"
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            New Order
-          </button>
-        </Link>
+        <button
+          data-testid="button-new-order"
+          onClick={() => setNewOrderOpen(true)}
+          className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+        >
+          <ShoppingCart className="h-4 w-4" />
+          New Order
+        </button>
       </div>
 
       {/* Stats grid */}

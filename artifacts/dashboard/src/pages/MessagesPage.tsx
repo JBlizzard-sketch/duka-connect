@@ -199,6 +199,33 @@ function MessageBubble({ msg }: { msg: Message }) {
   );
 }
 
+const QUICK_REPLIES = [
+  {
+    label: "✅ Confirmed",
+    text: "Asante! Order yako imethibitishwa. Tunaandaa sasa hivi. ✅\nThank you! Your order is confirmed. We're preparing it now.",
+  },
+  {
+    label: "📦 Ready",
+    text: "Bidhaa zako ziko tayari kuchukuliwa! 📦\nYour order is ready for pickup!",
+  },
+  {
+    label: "🚚 On the way",
+    text: "Bidhaa zako ziko njiani! Utapata hivi karibuni. 🚚\nYour order is on the way! You'll receive it shortly.",
+  },
+  {
+    label: "❌ Out of stock",
+    text: "Samahani, bidhaa hiyo imekwisha kwa sasa. 😔\nSorry, that item is currently out of stock. We'll notify you when it's available again.",
+  },
+  {
+    label: "💰 Pay Mpesa",
+    text: "Tafadhali lipa kwa Mpesa:\nPlease pay via Mpesa:\nBusiness No: 522533\nA/C No: [Order Number]\nAmount: KES ",
+  },
+  {
+    label: "⏰ Delay",
+    text: "Samahani, kutakuwa na ucheleweshaji mdogo. Tutakuarifiwa haraka iwezekanavyo. 🙏\nWe apologize for a short delay. We'll update you as soon as possible.",
+  },
+];
+
 export default function MessagesPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -404,9 +431,23 @@ export default function MessagesPage() {
             </div>
 
             {/* Reply box */}
-            <div className="border-t border-border px-4 py-3 bg-background">
+            <div className="border-t border-border px-4 pt-2.5 pb-3 bg-background space-y-2">
+              {/* Quick reply templates */}
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_REPLIES.map((qr) => (
+                  <button
+                    key={qr.label}
+                    onClick={() => setReplyText(qr.text)}
+                    title={qr.text}
+                    className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-border bg-muted/60 hover:bg-accent hover:border-primary/30 text-foreground transition-colors"
+                  >
+                    {qr.label}
+                  </button>
+                ))}
+              </div>
+
               {replyMutation.isError && (
-                <p className="text-xs text-red-500 mb-2">
+                <p className="text-xs text-red-500">
                   Failed to send. WhatsApp credentials may not be configured yet.
                 </p>
               )}
@@ -432,7 +473,7 @@ export default function MessagesPage() {
                   <Send className="h-4 w-4" />
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1.5 px-0.5">
+              <p className="text-[10px] text-muted-foreground px-0.5">
                 Messages are sent via WhatsApp Cloud API · Replies appear in customer's WhatsApp
               </p>
             </div>
