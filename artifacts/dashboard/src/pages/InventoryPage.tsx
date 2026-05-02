@@ -961,6 +961,22 @@ export default function InventoryPage() {
         </div>
       )}
 
+      {/* Low-stock alert banner */}
+      {!isLoading && lowStockCount > 0 && !lowStockOnly && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <p className="text-sm text-amber-800 flex-1">
+            <span className="font-semibold">{lowStockCount} product{lowStockCount === 1 ? "" : "s"}</span> {lowStockCount === 1 ? "is" : "are"} running low on stock.
+          </p>
+          <button
+            onClick={() => setLowStockOnly(true)}
+            className="text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-300 px-2.5 py-1 rounded-md hover:bg-amber-100 transition-colors shrink-0"
+          >
+            View low stock
+          </button>
+        </div>
+      )}
+
       {/* Search & filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[160px] max-w-sm">

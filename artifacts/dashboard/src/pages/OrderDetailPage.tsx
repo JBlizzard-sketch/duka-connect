@@ -43,6 +43,8 @@ export default function OrderDetailPage() {
   const [notesInput, setNotesInput] = useState("");
   const [editingInternalNotes, setEditingInternalNotes] = useState(false);
   const [internalNotesInput, setInternalNotesInput] = useState("");
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [deliveryInput, setDeliveryInput] = useState("");
   const [assignedToId, setAssignedToId] = useState<number | null | undefined>(undefined);
 
   const { data: staffData } = useListStaff();
@@ -546,27 +548,68 @@ export default function OrderDetailPage() {
       </Card>
 
       {/* Delivery */}
-      {(order.deliveryAddress || order.deliveryFee) && (
-        <Card data-print-hide>
-          <CardHeader className="px-4 pt-4 pb-2">
-            <CardTitle className="text-sm font-semibold">Delivery</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-1 text-sm">
-            {order.deliveryAddress && (
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground shrink-0">Address</span>
-                <span className="text-right">{order.deliveryAddress}</span>
+      <Card data-print-hide>
+        <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold">Delivery</CardTitle>
+          {!editingDelivery && (
+            <button
+              onClick={() => { setDeliveryInput(order.deliveryAddress ?? ""); setEditingDelivery(true); }}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              {order.deliveryAddress ? "Edit" : "Add address"}
+            </button>
+          )}
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-2 text-sm">
+          {editingDelivery ? (
+            <div className="space-y-2">
+              <input
+                autoFocus
+                type="text"
+                value={deliveryInput}
+                onChange={(e) => setDeliveryInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setEditingDelivery(false); }}
+                placeholder="e.g. Westlands, Nairobi — next to KFC"
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <div className="flex gap-2">
+                <button
+                  disabled={updateNotes.isPending}
+                  onClick={() => {
+                    updateNotes.mutate({ id, data: { deliveryAddress: deliveryInput.trim() || null } });
+                    setEditingDelivery(false);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  <Check className="h-3 w-3" />
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingDelivery(false)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Cancel
+                </button>
               </div>
-            )}
-            {order.deliveryFee && Number(order.deliveryFee) > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Delivery fee</span>
-                <span className="font-medium">{formatCurrency(Number(order.deliveryFee))}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </div>
+          ) : order.deliveryAddress ? (
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground shrink-0">Address</span>
+              <span className="text-right">{order.deliveryAddress}</span>
+            </div>
+          ) : (
+            <p className="text-muted-foreground italic">No delivery address set.</p>
+          )}
+          {order.deliveryFee && Number(order.deliveryFee) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Delivery fee</span>
+              <span className="font-medium">{formatCurrency(Number(order.deliveryFee))}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Staff assignment */}
       <Card data-print-hide>

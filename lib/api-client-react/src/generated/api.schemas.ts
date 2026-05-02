@@ -186,6 +186,7 @@ export interface UpdateOrderStatusRequest {
   status?: OrderStatus;
   notes?: string | null;
   internalNotes?: string | null;
+  deliveryAddress?: string | null;
   assignedToId?: number | null;
 }
 

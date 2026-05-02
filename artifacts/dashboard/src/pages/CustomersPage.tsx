@@ -299,6 +299,12 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
                 WhatsApp
               </a>
               <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <Link href={`/orders?search=${encodeURIComponent(customer.whatsappPhone)}`} onClick={onClose}>
+                  <FileText className="h-3.5 w-3.5" />
+                  Orders
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
                 <Link href={`/messages?customerId=${customer.id}`} onClick={onClose}>
                   <MessageCircle className="h-3.5 w-3.5" />
                   Message

@@ -298,8 +298,8 @@ router.patch("/orders/:id", async (req, res) => {
     return;
   }
   const { id } = paramsParsed.data;
-  const body = bodyParsed.data as typeof bodyParsed.data & { internalNotes?: string | null };
-  const { status, notes, internalNotes } = body;
+  const body = bodyParsed.data as typeof bodyParsed.data & { internalNotes?: string | null; deliveryAddress?: string | null };
+  const { status, notes, internalNotes, deliveryAddress } = body;
 
   // Fetch current order so we can detect actual status changes
   const [current] = await db
@@ -319,6 +319,7 @@ router.patch("/orders/:id", async (req, res) => {
   if (status !== undefined) setClause.status = status;
   if (notes !== undefined) setClause.notes = notes;
   if (internalNotes !== undefined) setClause.internalNotes = internalNotes;
+  if (deliveryAddress !== undefined) setClause.deliveryAddress = deliveryAddress;
   if ("assignedToId" in bodyParsed.data) setClause.assignedToId = bodyParsed.data.assignedToId ?? null;
 
   const [updated] = await db

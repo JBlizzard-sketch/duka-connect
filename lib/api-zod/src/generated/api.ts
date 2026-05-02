@@ -248,6 +248,7 @@ export const UpdateOrderStatusBody = zod.object({
     .optional(),
   notes: zod.string().nullish(),
   internalNotes: zod.string().nullish(),
+  deliveryAddress: zod.string().nullish(),
   assignedToId: zod.number().int().nullable().optional(),
 });
 

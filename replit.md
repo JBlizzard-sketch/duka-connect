@@ -26,6 +26,12 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## Shipped Features (Batch 15)
+
+- **Inventory: Low-stock alert banner** — Amber banner appears above search bar when any product stock ≤ lowStockThreshold. "View low stock" button activates the existing low-stock filter.
+- **Order Detail: Editable delivery address** — Delivery card now always visible (not hidden). Inline "Add address"/"Edit" button saves via PATCH `/api/orders/:id` with new `deliveryAddress` field.
+- **Customer sheet: "View Orders" link** — Orders button in customer detail sheet navigates to `/orders?search=<phone>`. OrdersPage now reads `?search=` from URL on mount to pre-populate the search.
+
 ## Shipped Features (Batch 14)
 
 - **Internal Order Notes**: `internalNotes` text column on `ordersTable`; editable Staff Notes card on OrderDetailPage (Lock icon, textarea, Save button).

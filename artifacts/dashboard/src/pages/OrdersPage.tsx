@@ -73,7 +73,10 @@ function getDateRange(filter: string): { dateFrom?: Date; dateTo?: Date } {
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => {
+    const p = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    return p.get("search") ?? "";
+  });
   const [page, setPage] = useState(1);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
