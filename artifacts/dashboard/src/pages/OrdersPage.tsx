@@ -1,12 +1,29 @@
 import { useState, useMemo } from "react";
-import { useListOrders } from "@workspace/api-client-react";
+import { useListOrders, useUpdateOrderStatus, getListOrdersQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Download, Calendar } from "lucide-react";
+import { ChevronRight, Search, Download, Calendar, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+
+const NEXT_STATUS: Record<string, string> = {
+  pending: "confirmed",
+  confirmed: "paid",
+  paid: "preparing",
+  preparing: "ready",
+  ready: "delivered",
+};
+const NEXT_LABEL: Record<string, string> = {
+  pending: "Confirm",
+  confirmed: "Mark Paid",
+  paid: "Preparing",
+  preparing: "Ready",
+  ready: "Delivered",
+};
 
 const STATUSES = [
   { value: "", label: "All" },
@@ -49,6 +66,19 @@ export default function OrdersPage() {
   const [dateFilter, setDateFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const quickUpdate = useUpdateOrderStatus({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+        toast({ title: "Order updated" });
+      },
+      onError: () => toast({ title: "Failed to update", variant: "destructive" }),
+    },
+  });
 
   const { dateFrom, dateTo } = useMemo(() => getDateRange(dateFilter), [dateFilter]);
 
@@ -201,7 +231,7 @@ export default function OrdersPage() {
                   <Link key={o.id} href={`/orders/${o.id}`}>
                     <div
                       data-testid={`row-order-${o.id}`}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      className="group flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -230,10 +260,29 @@ export default function OrdersPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <p className="text-sm font-semibold">
                           {formatCurrency(Number(o.totalAmount))}
                         </p>
+                        {NEXT_STATUS[o.status] && (
+                          <button
+                            disabled={quickUpdate.isPending}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              quickUpdate.mutate({
+                                id: o.id,
+                                data: { status: NEXT_STATUS[o.status] as "confirmed" | "paid" | "preparing" | "ready" | "delivered" | "cancelled" },
+                              });
+                            }}
+                            className="hidden group-hover:flex items-center gap-0.5 text-[11px] font-medium px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
+                          >
+                            {quickUpdate.isPending && (quickUpdate.variables as { id: number } | undefined)?.id === o.id ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : null}
+                            {NEXT_LABEL[o.status]}
+                          </button>
+                        )}
                       </div>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     </div>

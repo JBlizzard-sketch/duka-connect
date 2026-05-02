@@ -9,6 +9,13 @@ import {
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
+
+function getLoyaltyTier(points: number): { label: string; className: string } | null {
+  if (points <= 0) return null;
+  if (points < 100) return { label: "Bronze", className: "text-amber-700 bg-amber-100 border-amber-200" };
+  if (points < 500) return { label: "Silver", className: "text-slate-600 bg-slate-100 border-slate-200" };
+  return { label: "Gold ⭐", className: "text-yellow-700 bg-yellow-100 border-yellow-200" };
+}
 import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -460,13 +467,18 @@ export default function CustomersPage() {
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">
                         {c.name || formatPhone(c.whatsappPhone)}
                       </p>
-                      {c.loyaltyPoints >= 50 && (
-                        <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
-                      )}
+                      {(() => {
+                        const tier = getLoyaltyTier(c.loyaltyPoints);
+                        return tier ? (
+                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border leading-none ${tier.className}`}>
+                            {tier.label}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {formatPhone(c.whatsappPhone)}
@@ -476,7 +488,7 @@ export default function CustomersPage() {
                     <p className="text-xs font-semibold">
                       {formatCurrency(Number(c.totalSpend))}
                     </p>
-                    <p className="text-xs text-muted-foreground">{c.totalOrders} orders</p>
+                    <p className="text-xs text-muted-foreground">{c.totalOrders} orders · {c.loyaltyPoints} pts</p>
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </div>

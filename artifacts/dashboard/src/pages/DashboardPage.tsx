@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { useGetOrdersSummary, useGetLowStockProducts, useListOrders } from "@workspace/api-client-react";
-import { useMutation } from "@tanstack/react-query";
+import {
+  useGetOrdersSummary,
+  useGetLowStockProducts,
+  useListOrders,
+  useUpdateOrderStatus,
+  getListOrdersQueryKey,
+  getGetOrdersSummaryQueryKey,
+} from "@workspace/api-client-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
 import NewOrderDialog from "@/components/NewOrderDialog";
@@ -125,6 +132,91 @@ function DailyReportButton() {
   );
 }
 
+function PendingOrdersPanel() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data } = useListOrders(
+    { status: "pending", limit: 8, page: 1 } as Parameters<typeof useListOrders>[0],
+    { query: { refetchInterval: 15_000 } }
+  );
+  const pendingOrders = data?.orders ?? [];
+
+  const confirmOrder = useUpdateOrderStatus({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+        toast({ title: "Order confirmed" });
+      },
+      onError: () => toast({ title: "Failed to confirm order", variant: "destructive" }),
+    },
+  });
+
+  if (pendingOrders.length === 0) return null;
+
+  return (
+    <Card className="border-orange-200 bg-orange-50/60">
+      <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold text-orange-900 flex items-center gap-2">
+          <Clock className="h-4 w-4 text-orange-600" />
+          Needs Attention
+          <span className="bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+            {pendingOrders.length}
+          </span>
+        </CardTitle>
+        <Link href="/orders?status=pending">
+          <span className="text-xs text-orange-700 hover:underline cursor-pointer flex items-center gap-0.5">
+            View all <ChevronRight className="h-3 w-3" />
+          </span>
+        </Link>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <div className="divide-y divide-orange-100">
+          {pendingOrders.map((order) => {
+            const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+            const isPending = confirmOrder.isPending && (confirmOrder.variables as { id: number } | undefined)?.id === o.id;
+            return (
+              <div key={o.id} className="flex items-center gap-3 px-4 py-2.5">
+                <Link href={`/orders/${o.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono text-muted-foreground shrink-0">#{o.id}</span>
+                    <span className="text-xs font-medium truncate text-foreground">
+                      {o.customerName || formatPhone(o.customerPhone ?? "")}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatTimeAgo(o.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 pl-0">
+                    {formatCurrency(Number(o.totalAmount))}
+                  </p>
+                </Link>
+                <button
+                  disabled={confirmOrder.isPending}
+                  onClick={() =>
+                    confirmOrder.mutate({
+                      id: o.id,
+                      data: { status: "confirmed" },
+                    })
+                  }
+                  className="shrink-0 flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-3 w-3" />
+                  )}
+                  Confirm
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const { data: summary, isLoading: summaryLoading } = useGetOrdersSummary({
@@ -207,6 +299,9 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Pending orders action panel */}
+      <PendingOrdersPanel />
 
       {/* Low stock alert */}
       {lowStock && lowStock.products.length > 0 && (
