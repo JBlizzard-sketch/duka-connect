@@ -5,13 +5,14 @@ import {
   useListOrders,
   useUpdateOrderStatus,
   useGetAnalyticsSummary,
+  useGetTopProducts,
   getListOrdersQueryKey,
   getGetOrdersSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ShoppingCart, TrendingUp, TrendingDown, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2, ArrowRight, Minus } from "lucide-react";
+import { ShoppingCart, TrendingUp, TrendingDown, AlertTriangle, Clock, Package, ChevronRight, BarChart2, Loader2, CheckCircle2, ArrowRight, Minus, Trophy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge from "@/components/StatusBadge";
 import NewOrderDialog from "@/components/NewOrderDialog";
@@ -266,6 +267,10 @@ export default function DashboardPage() {
     { period: "week" },
     { query: { refetchInterval: 60_000 } }
   );
+  const { data: topProducts } = useGetTopProducts(
+    { period: "week", limit: 5 },
+    { query: { refetchInterval: 60_000 } }
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
@@ -371,6 +376,51 @@ export default function DashboardPage() {
                   </span>
                 </Link>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Top Products this week */}
+      {topProducts && topProducts.products.length > 0 && (
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-primary" />
+              Top Products This Week
+            </CardTitle>
+            <Link href="/analytics">
+              <span className="text-xs text-primary hover:underline cursor-pointer flex items-center gap-0.5">
+                Full report <ChevronRight className="h-3 w-3" />
+              </span>
+            </Link>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-2">
+              {topProducts.products.map((p, i) => {
+                const maxRevenue = topProducts.products[0]?.revenue ?? 1;
+                const pct = Math.round((p.revenue / maxRevenue) * 100);
+                return (
+                  <div key={p.productId} className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="text-xs font-medium truncate">{p.productName}</p>
+                        <p className="text-xs font-semibold shrink-0">{formatCurrency(p.revenue)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{p.quantitySold} sold</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

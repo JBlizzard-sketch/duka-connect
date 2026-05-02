@@ -16,6 +16,15 @@ function getLoyaltyTier(points: number): { label: string; className: string } | 
   if (points < 500) return { label: "Silver", className: "text-slate-600 bg-slate-100 border-slate-200" };
   return { label: "Gold ⭐", className: "text-yellow-700 bg-yellow-100 border-yellow-200" };
 }
+
+function getSpendTier(totalOrders: number, totalSpend: number): { label: string; className: string } | null {
+  if (totalOrders === 0) return null;
+  if (totalOrders >= 10 || totalSpend >= 10000)
+    return { label: "VIP", className: "text-purple-700 bg-purple-50 border-purple-200" };
+  if (totalOrders >= 3 || totalSpend >= 2000)
+    return { label: "Regular", className: "text-blue-700 bg-blue-50 border-blue-200" };
+  return { label: "New", className: "text-green-700 bg-green-50 border-green-200" };
+}
 import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink, ShoppingCart, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NewOrderDialog from "@/components/NewOrderDialog";
@@ -640,6 +649,14 @@ export default function CustomersPage() {
                       <p className="text-sm font-medium truncate">
                         {c.name || formatPhone(c.whatsappPhone)}
                       </p>
+                      {(() => {
+                        const spendTier = getSpendTier(c.totalOrders, Number(c.totalSpend));
+                        return spendTier ? (
+                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border leading-none ${spendTier.className}`}>
+                            {spendTier.label}
+                          </span>
+                        ) : null;
+                      })()}
                       {(() => {
                         const tier = getLoyaltyTier(c.loyaltyPoints);
                         return tier ? (

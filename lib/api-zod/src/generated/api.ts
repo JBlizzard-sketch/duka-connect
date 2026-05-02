@@ -15,6 +15,15 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Record a cash payment for an order
+ */
+export const RecordCashPaymentBody = zod.object({
+  orderId: zod.number(),
+  amount: zod.number().optional(),
+  notes: zod.string().optional(),
+});
+
+/**
  * @summary Webhook verification challenge (Meta)
  */
 export const VerifyWhatsappWebhookQueryParams = zod.object({

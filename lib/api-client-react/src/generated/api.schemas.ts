@@ -136,6 +136,7 @@ export interface Payment {
   merchantRequestId?: string | null;
   checkoutRequestId?: string | null;
   mpesaReceiptNumber?: string | null;
+  resultDesc?: string | null;
   paidAt?: string | null;
   createdAt: string;
 }

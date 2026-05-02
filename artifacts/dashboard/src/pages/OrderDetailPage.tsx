@@ -37,6 +37,8 @@ export default function OrderDetailPage() {
   const { toast } = useToast();
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [showMpesaForm, setShowMpesaForm] = useState(false);
+  const [showCashForm, setShowCashForm] = useState(false);
+  const [cashAmount, setCashAmount] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   const [assignedToId, setAssignedToId] = useState<number | null | undefined>(undefined);
@@ -90,6 +92,26 @@ export default function OrderDetailPage() {
     },
     onSuccess: () => toast({ title: "Payment request sent on WhatsApp" }),
     onError: () => toast({ title: "Failed to send payment request", variant: "destructive" }),
+  });
+
+  const recordCash = useMutation({
+    mutationFn: async (amount?: number) => {
+      const r = await fetch(`${BASE}/api/payments/cash`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: id, amount }),
+      });
+      if (!r.ok) throw new Error("Failed to record payment");
+      return r.json();
+    },
+    onSuccess: () => {
+      setShowCashForm(false);
+      setCashAmount("");
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+      toast({ title: "Cash payment recorded", description: "Order marked as paid" });
+    },
+    onError: () => toast({ title: "Failed to record payment", variant: "destructive" }),
   });
 
   const sendReceipt = useMutation({
@@ -385,16 +407,33 @@ export default function OrderDetailPage() {
         <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold">Payment</CardTitle>
           {order.payment ? (
-            <PaymentBadge status={order.payment.status} />
+            <div className="flex items-center gap-1.5">
+              {order.payment.resultDesc === "cash" || order.payment.resultDesc?.startsWith("cash:") ? (
+                <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Cash</span>
+              ) : (
+                <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Mpesa</span>
+              )}
+              <PaymentBadge status={order.payment.status} />
+            </div>
           ) : (
-            <button
-              data-testid="button-initiate-payment"
-              onClick={() => setShowMpesaForm(true)}
-              className="flex items-center gap-1.5 text-xs bg-secondary text-secondary-foreground px-2.5 py-1 rounded-md hover:bg-secondary/90 transition-colors font-medium"
-            >
-              <CreditCard className="h-3.5 w-3.5" />
-              Mpesa STK Push
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                data-testid="button-record-cash"
+                onClick={() => { setShowCashForm(true); setShowMpesaForm(false); }}
+                className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-2.5 py-1 rounded-md hover:bg-green-700 transition-colors font-medium"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Cash
+              </button>
+              <button
+                data-testid="button-initiate-payment"
+                onClick={() => { setShowMpesaForm(true); setShowCashForm(false); }}
+                className="flex items-center gap-1.5 text-xs bg-secondary text-secondary-foreground px-2.5 py-1 rounded-md hover:bg-secondary/90 transition-colors font-medium"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Mpesa
+              </button>
+            </div>
           )}
         </CardHeader>
         <CardContent className="px-4 pb-4">
@@ -416,6 +455,43 @@ export default function OrderDetailPage() {
                   <span>{formatPhone(order.payment.mpesaPhone)}</span>
                 </div>
               )}
+              {order.payment.paidAt && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Paid at</span>
+                  <span className="text-xs">{formatDateTime(order.payment.paidAt)}</span>
+                </div>
+              )}
+            </div>
+          ) : showCashForm ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Leave amount blank to use order total ({formatCurrency(Number(order.totalAmount))})
+              </p>
+              <input
+                data-testid="input-cash-amount"
+                type="number"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                placeholder={`Amount (default: ${Number(order.totalAmount).toFixed(0)})`}
+                min={0}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <div className="flex gap-2">
+                <button
+                  data-testid="button-confirm-cash"
+                  disabled={recordCash.isPending}
+                  onClick={() => recordCash.mutate(cashAmount ? Number(cashAmount) : undefined)}
+                  className="flex-1 bg-green-600 text-white text-sm font-medium py-2 rounded-md hover:bg-green-700 disabled:opacity-60 transition-colors"
+                >
+                  {recordCash.isPending ? "Recording..." : "Confirm Cash Payment"}
+                </button>
+                <button
+                  onClick={() => setShowCashForm(false)}
+                  className="px-3 text-sm border rounded-md hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : showMpesaForm ? (
             <div className="space-y-3">

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { paymentsTable, ordersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { InitiatePaymentBody, GetPaymentParams } from "@workspace/api-zod";
+import { InitiatePaymentBody, GetPaymentParams, RecordCashPaymentBody } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -166,6 +166,47 @@ router.post("/payments/initiate", async (req, res) => {
       .where(eq(paymentsTable.id, payment.id));
     res.status(502).json({ error: "Mpesa request failed" });
   }
+});
+
+router.post("/payments/cash", async (req, res) => {
+  const parsed = RecordCashPaymentBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+  const { orderId, amount, notes } = parsed.data;
+
+  const [order] = await db
+    .select()
+    .from(ordersTable)
+    .where(eq(ordersTable.id, orderId))
+    .limit(1);
+
+  if (!order) {
+    res.status(404).json({ error: "Order not found" });
+    return;
+  }
+
+  const paymentAmount = amount ?? Number(order.totalAmount);
+
+  const [payment] = await db
+    .insert(paymentsTable)
+    .values({
+      orderId,
+      amount: String(paymentAmount),
+      status: "completed",
+      resultDesc: notes ? `cash: ${notes}` : "cash",
+      paidAt: new Date(),
+    })
+    .returning();
+
+  await db
+    .update(ordersTable)
+    .set({ status: "paid", updatedAt: new Date() })
+    .where(eq(ordersTable.id, orderId));
+
+  logger.info({ orderId, paymentId: payment.id }, "Cash payment recorded");
+  res.status(201).json(payment);
 });
 
 router.get("/payments/:id", async (req, res) => {
