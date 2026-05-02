@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useListOrders, useUpdateOrderStatus, getListOrdersQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Download, Calendar, Loader2, ShoppingCart } from "lucide-react";
+import { ChevronRight, Search, Download, Calendar, Loader2, ShoppingCart, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
@@ -44,6 +44,14 @@ const DATE_FILTERS = [
   { value: "month", label: "This month" },
 ];
 
+const BULK_ACTIONS: { status: "confirmed" | "paid" | "preparing" | "ready" | "delivered" | "cancelled"; label: string; cls: string }[] = [
+  { status: "confirmed", label: "Confirm", cls: "bg-blue-600 text-white hover:bg-blue-700" },
+  { status: "preparing", label: "Preparing", cls: "bg-orange-500 text-white hover:bg-orange-600" },
+  { status: "ready", label: "Ready", cls: "bg-teal-600 text-white hover:bg-teal-700" },
+  { status: "delivered", label: "Delivered", cls: "bg-green-600 text-white hover:bg-green-700" },
+  { status: "cancelled", label: "Cancel", cls: "bg-red-600 text-white hover:bg-red-700" },
+];
+
 function getDateRange(filter: string): { dateFrom?: Date; dateTo?: Date } {
   if (filter === "all") return {};
   const now = new Date();
@@ -68,6 +76,8 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -135,8 +145,53 @@ export default function OrdersPage() {
       })
     : allOrders;
 
+  const allSelected = orders.length > 0 && orders.every((o) => selectedIds.has(o.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelect = useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(orders.map((o) => o.id)));
+    }
+  }, [allSelected, orders]);
+
+  async function bulkUpdateStatus(status: "confirmed" | "paid" | "preparing" | "ready" | "delivered" | "cancelled") {
+    setBulkPending(true);
+    const ids = Array.from(selectedIds);
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          new Promise<void>((resolve, reject) => {
+            quickUpdate.mutate(
+              { id, data: { status } },
+              { onSuccess: () => resolve(), onError: reject }
+            );
+          })
+        )
+      );
+      setSelectedIds(new Set());
+      toast({ title: `${ids.length} order${ids.length !== 1 ? "s" : ""} marked as ${status}` });
+    } catch {
+      toast({ title: "Some updates failed", variant: "destructive" });
+    } finally {
+      setBulkPending(false);
+      queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+    }
+  }
+
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto pb-28">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Orders</h1>
         <div className="flex items-center gap-3">
@@ -234,69 +289,109 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
+              {/* Select-all header row */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
+                <input
+                  type="checkbox"
+                  aria-label="Select all"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="h-3.5 w-3.5 rounded border-input cursor-pointer accent-primary"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {someSelected ? `${selectedIds.size} selected` : "Select all"}
+                </span>
+              </div>
+
               {orders.map((order) => {
                 const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
                 const waRef = o.notes?.match(/WA-[A-Z0-9]+/)?.[0];
+                const isSelected = selectedIds.has(o.id);
                 return (
-                  <Link key={o.id} href={`/orders/${o.id}`}>
+                  <div
+                    key={o.id}
+                    className={cn("flex items-center", isSelected && "bg-primary/5")}
+                  >
+                    {/* Checkbox */}
                     <div
-                      data-testid={`row-order-${o.id}`}
-                      className="group flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      className="pl-3 pr-1 py-3 flex items-center self-stretch cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleSelect(o.id, !isSelected);
+                      }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-mono text-muted-foreground">
-                            #{o.id}
-                          </span>
-                          <StatusBadge status={o.status} />
-                          {waRef && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {waRef}
+                      <input
+                        type="checkbox"
+                        aria-label={`Select order ${o.id}`}
+                        checked={isSelected}
+                        onChange={() => toggleSelect(o.id, !isSelected)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-3.5 w-3.5 rounded border-input cursor-pointer accent-primary"
+                      />
+                    </div>
+
+                    {/* Row content */}
+                    <Link href={`/orders/${o.id}`} className="flex-1 min-w-0">
+                      <div
+                        data-testid={`row-order-${o.id}`}
+                        className="group flex items-center gap-3 px-3 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono text-muted-foreground">
+                              #{o.id}
                             </span>
+                            <StatusBadge status={o.status} />
+                            {waRef && (
+                              <span className="text-xs text-muted-foreground font-mono">
+                                {waRef}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {o.customerName ? (
+                              <p className="text-xs font-medium text-foreground truncate max-w-[160px]">
+                                {o.customerName}
+                              </p>
+                            ) : o.customerPhone ? (
+                              <p className="text-xs text-muted-foreground">
+                                {formatPhone(o.customerPhone)}
+                              </p>
+                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              · {formatTimeAgo(o.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <p className="text-sm font-semibold">
+                            {formatCurrency(Number(o.totalAmount))}
+                          </p>
+                          {!someSelected && NEXT_STATUS[o.status] && (
+                            <button
+                              disabled={quickUpdate.isPending}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                quickUpdate.mutate({
+                                  id: o.id,
+                                  data: { status: NEXT_STATUS[o.status] as "confirmed" | "paid" | "preparing" | "ready" | "delivered" | "cancelled" },
+                                });
+                              }}
+                              className="hidden group-hover:flex items-center gap-0.5 text-[11px] font-medium px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
+                            >
+                              {quickUpdate.isPending && (quickUpdate.variables as { id: number } | undefined)?.id === o.id ? (
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              ) : null}
+                              {NEXT_LABEL[o.status]}
+                            </button>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {o.customerName ? (
-                            <p className="text-xs font-medium text-foreground truncate max-w-[160px]">
-                              {o.customerName}
-                            </p>
-                          ) : o.customerPhone ? (
-                            <p className="text-xs text-muted-foreground">
-                              {formatPhone(o.customerPhone)}
-                            </p>
-                          ) : null}
-                          <span className="text-xs text-muted-foreground">
-                            · {formatTimeAgo(o.createdAt)}
-                          </span>
-                        </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <p className="text-sm font-semibold">
-                          {formatCurrency(Number(o.totalAmount))}
-                        </p>
-                        {NEXT_STATUS[o.status] && (
-                          <button
-                            disabled={quickUpdate.isPending}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              quickUpdate.mutate({
-                                id: o.id,
-                                data: { status: NEXT_STATUS[o.status] as "confirmed" | "paid" | "preparing" | "ready" | "delivered" | "cancelled" },
-                              });
-                            }}
-                            className="hidden group-hover:flex items-center gap-0.5 text-[11px] font-medium px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
-                          >
-                            {quickUpdate.isPending && (quickUpdate.variables as { id: number } | undefined)?.id === o.id ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            ) : null}
-                            {NEXT_LABEL[o.status]}
-                          </button>
-                        )}
-                      </div>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    </div>
-                  </Link>
+                    </Link>
+                  </div>
                 );
               })}
             </div>
@@ -323,6 +418,38 @@ export default function OrdersPage() {
             className="px-3 py-1.5 text-xs border rounded-md disabled:opacity-40 hover:bg-muted transition-colors"
           >
             Next
+          </button>
+        </div>
+      )}
+
+      {/* Bulk action floating bar */}
+      {someSelected && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background border border-border shadow-xl rounded-xl px-4 py-3 flex-wrap max-w-lg w-[calc(100%-2rem)]">
+          <span className="text-sm font-medium text-foreground shrink-0">
+            {selectedIds.size} order{selectedIds.size !== 1 ? "s" : ""}
+          </span>
+          <div className="flex items-center gap-1.5 flex-wrap flex-1">
+            {BULK_ACTIONS.map((a) => (
+              <button
+                key={a.status}
+                disabled={bulkPending}
+                onClick={() => bulkUpdateStatus(a.status)}
+                className={cn(
+                  "flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-60",
+                  a.cls
+                )}
+              >
+                {bulkPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
+            title="Clear selection"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

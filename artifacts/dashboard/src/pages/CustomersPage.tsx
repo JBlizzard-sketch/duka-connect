@@ -17,6 +17,7 @@ function getLoyaltyTier(points: number): { label: string; className: string } | 
   return { label: "Gold ⭐", className: "text-yellow-700 bg-yellow-100 border-yellow-200" };
 }
 import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus, ExternalLink, ShoppingCart } from "lucide-react";
+import { cn } from "@/lib/utils";
 import NewOrderDialog from "@/components/NewOrderDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -421,9 +422,20 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
   );
 }
 
+type SortKey = "lastOrder" | "spend" | "orders" | "loyalty" | "name";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "lastOrder", label: "Last Order" },
+  { value: "spend", label: "Most Spent" },
+  { value: "orders", label: "Most Orders" },
+  { value: "loyalty", label: "Loyalty Pts" },
+  { value: "name", label: "Name A–Z" },
+];
+
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortKey>("lastOrder");
   const [addOpen, setAddOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -442,8 +454,32 @@ export default function CustomersPage() {
     limit: 30,
   } as Parameters<typeof useListCustomers>[0]);
 
-  const customers = data?.customers ?? [];
+  const rawCustomers = data?.customers ?? [];
   const meta = data?.meta;
+
+  const customers = useMemo(() => {
+    const arr = [...rawCustomers];
+    switch (sortBy) {
+      case "spend":
+        return arr.sort((a, b) => Number(b.totalSpend) - Number(a.totalSpend));
+      case "orders":
+        return arr.sort((a, b) => b.totalOrders - a.totalOrders);
+      case "loyalty":
+        return arr.sort((a, b) => b.loyaltyPoints - a.loyaltyPoints);
+      case "name":
+        return arr.sort((a, b) =>
+          (a.name || a.whatsappPhone).localeCompare(b.name || b.whatsappPhone)
+        );
+      case "lastOrder":
+      default:
+        return arr.sort((a, b) => {
+          if (!a.lastOrderAt && !b.lastOrderAt) return 0;
+          if (!a.lastOrderAt) return 1;
+          if (!b.lastOrderAt) return -1;
+          return new Date(b.lastOrderAt).getTime() - new Date(a.lastOrderAt).getTime();
+        });
+    }
+  }, [rawCustomers, sortBy]);
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
@@ -463,18 +499,36 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <input
-          data-testid="input-search"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Search customers..."
-          className="w-full pl-8 pr-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            data-testid="input-search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search customers..."
+            className="w-full pl-8 pr-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setSortBy(opt.value)}
+              className={cn(
+                "shrink-0 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                sortBy === opt.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-foreground border-border hover:bg-muted"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>

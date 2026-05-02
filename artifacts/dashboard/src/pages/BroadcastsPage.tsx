@@ -6,8 +6,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateTime } from "@/lib/format";
-import { Radio, Plus, Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Radio, Plus, Loader2, Sparkles, ChevronDown, ChevronUp, Smartphone } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +70,62 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "text-red-700 bg-red-100",
 };
 
+function parseWhatsApp(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\*(.*?)\*/g, "<strong>$1</strong>")
+    .replace(/_(.*?)_/g, "<em>$1</em>")
+    .replace(/~(.*?)~/g, "<s>$1</s>")
+    .replace(/\n/g, "<br/>");
+}
+
+function WhatsAppPreview({ message }: { message: string }) {
+  const html = parseWhatsApp(message || "");
+  return (
+    <div className="flex flex-col h-full">
+      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <Smartphone className="h-3.5 w-3.5" />
+        Preview
+      </p>
+      {/* Phone frame */}
+      <div className="flex-1 flex flex-col rounded-2xl overflow-hidden border-2 border-gray-300 shadow-md bg-gray-100 min-h-[280px] max-h-[380px]">
+        {/* WhatsApp header bar */}
+        <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: "#075E54" }}>
+          <div className="w-7 h-7 rounded-full bg-white/30 flex items-center justify-center text-white text-[10px] font-bold">D</div>
+          <div>
+            <p className="text-white text-xs font-semibold leading-none">Duka</p>
+            <p className="text-white/70 text-[9px] leading-none mt-0.5">Business Account</p>
+          </div>
+        </div>
+        {/* Chat area */}
+        <div
+          className="flex-1 overflow-y-auto px-3 py-3"
+          style={{ background: "#ECE5DD" }}
+        >
+          {message.trim() ? (
+            <div className="flex justify-end">
+              <div
+                className="max-w-[85%] rounded-xl rounded-tr-sm px-3 py-2 text-xs shadow-sm"
+                style={{ background: "#DCF8C6", color: "#111" }}
+              >
+                <p
+                  className="leading-relaxed whitespace-pre-wrap break-words"
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+                <p className="text-right text-[9px] mt-1 opacity-60">12:00 ✓✓</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-xs text-gray-400 mt-6">Message preview will appear here</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewBroadcastDialog() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -107,122 +163,131 @@ function NewBroadcastDialog() {
           New Broadcast
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl w-full">
         <DialogHeader>
           <DialogTitle>New Broadcast</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 pt-1">
-          {/* Segment */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-2 block">
-              Send to
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {SEGMENTS.map((s) => (
-                <button
-                  key={s.value}
-                  data-testid={`segment-${s.value}`}
-                  onClick={() => setSegment(s.value)}
-                  className={cn(
-                    "p-2.5 rounded-lg border text-left transition-colors",
-                    segment === s.value
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-muted"
-                  )}
-                >
-                  <p className="text-xs font-medium">{s.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Templates */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowTemplates((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Use a template
-              {showTemplates ? (
-                <ChevronUp className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </button>
-            {showTemplates && (
-              <div className="mt-2 space-y-2">
-                {templateCategories.map((cat) => (
-                  <div key={cat}>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                      {cat}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {TEMPLATES.filter((t) => t.category === cat).map((t) => (
-                        <button
-                          key={t.label}
-                          type="button"
-                          onClick={() => {
-                            setMessage(t.message);
-                            setShowTemplates(false);
-                          }}
-                          className="px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted hover:border-primary/40 transition-colors"
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+          {/* Left: compose */}
+          <div className="space-y-4">
+            {/* Segment */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-2 block">
+                Send to
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {SEGMENTS.map((s) => (
+                  <button
+                    key={s.value}
+                    data-testid={`segment-${s.value}`}
+                    onClick={() => setSegment(s.value)}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-left transition-colors",
+                      segment === s.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted"
+                    )}
+                  >
+                    <p className="text-xs font-medium">{s.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Message */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-muted-foreground">Message</label>
-              <span
-                className={cn("text-xs", isOverLimit ? "text-red-500" : "text-muted-foreground")}
-              >
-                {charCount}/4096
-              </span>
             </div>
-            <textarea
-              data-testid="input-broadcast-message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Habari! Tuna offer special leo — buy 2 get 1 free on all medicines. Wasiliana nasi sasa!"
-              rows={5}
-              className={cn(
-                "w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none",
-                isOverLimit ? "border-red-400" : "border-input"
+
+            {/* Templates */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowTemplates((v) => !v)}
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Use a template
+                {showTemplates ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </button>
+              {showTemplates && (
+                <div className="mt-2 space-y-2">
+                  {templateCategories.map((cat) => (
+                    <div key={cat}>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                        {cat}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TEMPLATES.filter((t) => t.category === cat).map((t) => (
+                          <button
+                            key={t.label}
+                            type="button"
+                            onClick={() => {
+                              setMessage(t.message);
+                              setShowTemplates(false);
+                            }}
+                            className="px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted hover:border-primary/40 transition-colors"
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            />
+            </div>
+
+            {/* Message */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-muted-foreground">Message</label>
+                <span
+                  className={cn("text-xs", isOverLimit ? "text-red-500" : "text-muted-foreground")}
+                >
+                  {charCount}/4096
+                </span>
+              </div>
+              <textarea
+                data-testid="input-broadcast-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={"Habari! Tuna offer special leo — buy 2 get 1 free.\n\nUse *bold* and _italic_ formatting."}
+                rows={6}
+                className={cn(
+                  "w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none",
+                  isOverLimit ? "border-red-400" : "border-input"
+                )}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Use <code className="text-[10px]">*bold*</code>, <code className="text-[10px]">_italic_</code>, <code className="text-[10px]">~strikethrough~</code>
+              </p>
+            </div>
+
+            <button
+              data-testid="button-send-broadcast"
+              disabled={!message.trim() || isOverLimit || createBroadcast.isPending}
+              onClick={() =>
+                createBroadcast.mutate({ data: { message: message.trim(), segment } })
+              }
+              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium py-2.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+            >
+              {createBroadcast.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Radio className="h-4 w-4" />
+                  Send Broadcast
+                </>
+              )}
+            </button>
           </div>
 
-          <button
-            data-testid="button-send-broadcast"
-            disabled={!message.trim() || isOverLimit || createBroadcast.isPending}
-            onClick={() =>
-              createBroadcast.mutate({ data: { message: message.trim(), segment } })
-            }
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium py-2.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
-          >
-            {createBroadcast.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Radio className="h-4 w-4" />
-                Send Broadcast
-              </>
-            )}
-          </button>
+          {/* Right: WhatsApp preview */}
+          <WhatsAppPreview message={message} />
         </div>
       </DialogContent>
     </Dialog>
