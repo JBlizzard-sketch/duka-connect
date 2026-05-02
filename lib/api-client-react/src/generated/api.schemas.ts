@@ -172,8 +172,8 @@ export interface CreateOrderRequest {
 }
 
 export interface UpdateOrderStatusRequest {
-  status: OrderStatus;
-  notes?: string;
+  status?: OrderStatus;
+  notes?: string | null;
 }
 
 export interface ProductVariant {
@@ -379,8 +379,12 @@ export interface BusinessProfile {
   id: number;
   name: string;
   whatsappPhoneNumberId?: string | null;
+  whatsappBusinessAccountId?: string | null;
+  whatsappApiTokenSet: boolean;
   whatsappConnected: boolean;
   mpesaShortCode?: string | null;
+  mpesaPasskeySet: boolean;
+  mpesaConsumerKeySet: boolean;
   mpesaConnected: boolean;
   currency: string;
   timezone: string;
@@ -391,7 +395,12 @@ export interface BusinessProfile {
 export interface UpdateBusinessProfileRequest {
   name?: string;
   whatsappPhoneNumberId?: string;
+  whatsappBusinessAccountId?: string;
+  whatsappApiToken?: string;
   mpesaShortCode?: string;
+  mpesaPasskey?: string;
+  mpesaConsumerKey?: string;
+  mpesaConsumerSecret?: string;
   currency?: string;
   timezone?: string;
   logoUrl?: string;

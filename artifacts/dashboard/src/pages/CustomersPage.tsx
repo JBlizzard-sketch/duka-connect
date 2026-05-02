@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: () => void }) {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -44,6 +46,17 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
     },
   });
 
+  const updateNotes = useUpdateCustomer({
+    mutation: {
+      onSuccess: () => {
+        setEditingNotes(false);
+        queryClient.invalidateQueries({ queryKey: getGetCustomerQueryKey(customerId) });
+        toast({ title: "Notes saved" });
+      },
+      onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    },
+  });
+
   function startEdit() {
     setNameInput(customer?.name ?? "");
     setEditingName(true);
@@ -51,6 +64,15 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
 
   function saveName() {
     updateCustomer.mutate({ id: customerId, data: { name: nameInput.trim() || null } });
+  }
+
+  function startEditNotes() {
+    setNotesInput((customer as { notes?: string | null })?.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function saveNotes() {
+    updateNotes.mutate({ id: customerId, data: { notes: notesInput.trim() || null } });
   }
 
   return (
@@ -179,6 +201,64 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
               </div>
             </div>
           )}
+
+          {/* Notes / delivery address */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <FileText className="h-3 w-3" />
+                Notes
+              </h4>
+              {!editingNotes && (
+                <button
+                  data-testid="button-edit-customer-notes"
+                  onClick={startEditNotes}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Pencil className="h-3 w-3" />
+                  {(customer as { notes?: string | null })?.notes ? "Edit" : "Add note"}
+                </button>
+              )}
+            </div>
+            {editingNotes ? (
+              <div className="space-y-2">
+                <textarea
+                  data-testid="textarea-customer-notes"
+                  autoFocus
+                  value={notesInput}
+                  onChange={(e) => setNotesInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setEditingNotes(false); }}
+                  placeholder="Delivery address, preferred pickup time…"
+                  rows={3}
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    data-testid="button-save-customer-notes"
+                    disabled={updateNotes.isPending}
+                    onClick={saveNotes}
+                    className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                  >
+                    {updateNotes.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingNotes(false)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (customer as { notes?: string | null })?.notes ? (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {(customer as { notes?: string | null }).notes}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+            )}
+          </div>
         </div>
       )}
     </SheetContent>

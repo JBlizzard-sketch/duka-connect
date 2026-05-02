@@ -913,7 +913,7 @@ components:
           $ref: "#/components/schemas/OrderStatus"
         notes:
           type: string
-      required: [status]
+          nullable: true
 
     # ── Products ──────────────────────────────────────────────────────────
     ProductVariant:
@@ -1375,11 +1375,20 @@ components:
         whatsappPhoneNumberId:
           type: string
           nullable: true
+        whatsappBusinessAccountId:
+          type: string
+          nullable: true
+        whatsappApiTokenSet:
+          type: boolean
         whatsappConnected:
           type: boolean
         mpesaShortCode:
           type: string
           nullable: true
+        mpesaPasskeySet:
+          type: boolean
+        mpesaConsumerKeySet:
+          type: boolean
         mpesaConnected:
           type: boolean
         currency:
@@ -1394,7 +1403,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, name, whatsappConnected, mpesaConnected, currency, timezone, createdAt]
+      required: [id, name, whatsappConnected, whatsappApiTokenSet, mpesaConnected, mpesaPasskeySet, mpesaConsumerKeySet, currency, timezone, createdAt]
 
     UpdateBusinessProfileRequest:
       type: object
@@ -1403,7 +1412,17 @@ components:
           type: string
         whatsappPhoneNumberId:
           type: string
+        whatsappBusinessAccountId:
+          type: string
+        whatsappApiToken:
+          type: string
         mpesaShortCode:
+          type: string
+        mpesaPasskey:
+          type: string
+        mpesaConsumerKey:
+          type: string
+        mpesaConsumerSecret:
           type: string
         currency:
           type: string

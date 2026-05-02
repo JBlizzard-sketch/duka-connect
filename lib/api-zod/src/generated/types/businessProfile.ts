@@ -10,8 +10,12 @@ export interface BusinessProfile {
   id: number;
   name: string;
   whatsappPhoneNumberId?: string | null;
+  whatsappBusinessAccountId?: string | null;
+  whatsappApiTokenSet: boolean;
   whatsappConnected: boolean;
   mpesaShortCode?: string | null;
+  mpesaPasskeySet: boolean;
+  mpesaConsumerKeySet: boolean;
   mpesaConnected: boolean;
   currency: string;
   timezone: string;

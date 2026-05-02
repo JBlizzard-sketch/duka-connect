@@ -257,9 +257,27 @@ router.patch("/orders/:id", async (req, res) => {
   const { id } = paramsParsed.data;
   const { status, notes } = bodyParsed.data;
 
+  // Fetch current order so we can detect actual status changes
+  const [current] = await db
+    .select({ status: ordersTable.status, customerId: ordersTable.customerId })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  if (!current) {
+    res.status(404).json({ error: "Order not found" });
+    return;
+  }
+
+  const statusChanged = status !== undefined && status !== current.status;
+
+  const setClause: Record<string, unknown> = { updatedAt: new Date() };
+  if (status !== undefined) setClause.status = status;
+  if (notes !== undefined) setClause.notes = notes;
+
   const [updated] = await db
     .update(ordersTable)
-    .set({ status, notes, updatedAt: new Date() })
+    .set(setClause)
     .where(eq(ordersTable.id, id))
     .returning();
 
@@ -268,8 +286,8 @@ router.patch("/orders/:id", async (req, res) => {
     return;
   }
 
-  // Update customer stats if paid
-  if (status === "paid") {
+  // Update customer stats only when transitioning INTO paid
+  if (statusChanged && status === "paid") {
     await db
       .update(customersTable)
       .set({
@@ -282,8 +300,8 @@ router.patch("/orders/:id", async (req, res) => {
       .where(eq(customersTable.id, updated.customerId));
   }
 
-  // Deduct stock when order is confirmed
-  if (status === "confirmed") {
+  // Deduct stock only when transitioning INTO confirmed
+  if (statusChanged && status === "confirmed") {
     const items = await db
       .select()
       .from(orderItemsTable)
@@ -304,8 +322,8 @@ router.patch("/orders/:id", async (req, res) => {
     );
   }
 
-  // Send WhatsApp status notification to customer (fire-and-forget)
-  if (status && ["confirmed", "paid", "preparing", "ready", "delivered", "cancelled"].includes(status)) {
+  // Send WhatsApp status notification only on actual status transitions
+  if (statusChanged && status && ["confirmed", "paid", "preparing", "ready", "delivered", "cancelled"].includes(status)) {
     const [customer] = await db
       .select({ name: customersTable.name, phone: customersTable.whatsappPhone })
       .from(customersTable)

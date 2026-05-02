@@ -8,6 +8,6 @@
 import type { OrderStatus } from "./orderStatus";
 
 export interface UpdateOrderStatusRequest {
-  status: OrderStatus;
-  notes?: string;
+  status?: OrderStatus;
+  notes?: string | null;
 }

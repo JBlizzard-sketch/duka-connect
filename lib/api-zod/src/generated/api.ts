@@ -220,16 +220,18 @@ export const UpdateOrderStatusParams = zod.object({
 });
 
 export const UpdateOrderStatusBody = zod.object({
-  status: zod.enum([
-    "pending",
-    "confirmed",
-    "paid",
-    "preparing",
-    "ready",
-    "delivered",
-    "cancelled",
-  ]),
-  notes: zod.string().optional(),
+  status: zod
+    .enum([
+      "pending",
+      "confirmed",
+      "paid",
+      "preparing",
+      "ready",
+      "delivered",
+      "cancelled",
+    ])
+    .optional(),
+  notes: zod.string().nullish(),
 });
 
 export const updateOrderStatusResponseCurrencyDefault = `KES`;
@@ -833,8 +835,12 @@ export const GetBusinessProfileResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   whatsappPhoneNumberId: zod.string().nullish(),
+  whatsappBusinessAccountId: zod.string().nullish(),
+  whatsappApiTokenSet: zod.boolean(),
   whatsappConnected: zod.boolean(),
   mpesaShortCode: zod.string().nullish(),
+  mpesaPasskeySet: zod.boolean(),
+  mpesaConsumerKeySet: zod.boolean(),
   mpesaConnected: zod.boolean(),
   currency: zod.string().default(getBusinessProfileResponseCurrencyDefault),
   timezone: zod.string().default(getBusinessProfileResponseTimezoneDefault),
@@ -848,7 +854,12 @@ export const GetBusinessProfileResponse = zod.object({
 export const UpdateBusinessProfileBody = zod.object({
   name: zod.string().optional(),
   whatsappPhoneNumberId: zod.string().optional(),
+  whatsappBusinessAccountId: zod.string().optional(),
+  whatsappApiToken: zod.string().optional(),
   mpesaShortCode: zod.string().optional(),
+  mpesaPasskey: zod.string().optional(),
+  mpesaConsumerKey: zod.string().optional(),
+  mpesaConsumerSecret: zod.string().optional(),
   currency: zod.string().optional(),
   timezone: zod.string().optional(),
   logoUrl: zod.string().optional(),
@@ -861,8 +872,12 @@ export const UpdateBusinessProfileResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   whatsappPhoneNumberId: zod.string().nullish(),
+  whatsappBusinessAccountId: zod.string().nullish(),
+  whatsappApiTokenSet: zod.boolean(),
   whatsappConnected: zod.boolean(),
   mpesaShortCode: zod.string().nullish(),
+  mpesaPasskeySet: zod.boolean(),
+  mpesaConsumerKeySet: zod.boolean(),
   mpesaConnected: zod.boolean(),
   currency: zod.string().default(updateBusinessProfileResponseCurrencyDefault),
   timezone: zod.string().default(updateBusinessProfileResponseTimezoneDefault),

@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQuery
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +34,8 @@ export default function OrderDetailPage() {
   const { toast } = useToast();
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [showMpesaForm, setShowMpesaForm] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState("");
 
   const { data: order, isLoading } = useGetOrder(id, {
     query: { enabled: !!id, queryKey: getGetOrderQueryKey(id) },
@@ -47,6 +49,17 @@ export default function OrderDetailPage() {
         toast({ title: "Order updated" });
       },
       onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    },
+  });
+
+  const updateNotes = useUpdateOrderStatus({
+    mutation: {
+      onSuccess: () => {
+        setEditingNotes(false);
+        queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+        toast({ title: "Notes saved" });
+      },
+      onError: () => toast({ title: "Save failed", variant: "destructive" }),
     },
   });
 
@@ -76,6 +89,18 @@ export default function OrderDetailPage() {
   }
 
   const nextStatuses = NEXT_STATUSES[order.status] ?? [];
+
+  function startEditNotes() {
+    setNotesInput(order?.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function saveNotes() {
+    updateNotes.mutate({
+      id,
+      data: { notes: notesInput.trim() || null },
+    });
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto">
@@ -273,20 +298,69 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Notes */}
-      {order.notes && (
-        <Card>
-          <CardHeader className="px-4 pt-4 pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Notes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <p className="text-sm text-muted-foreground">{order.notes}</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Notes — always shown, editable */}
+      <Card>
+        <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Notes
+          </CardTitle>
+          {!editingNotes && (
+            <button
+              data-testid="button-edit-notes"
+              onClick={startEditNotes}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              {order.notes ? "Edit" : "Add note"}
+            </button>
+          )}
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          {editingNotes ? (
+            <div className="space-y-2">
+              <textarea
+                data-testid="textarea-notes"
+                autoFocus
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setEditingNotes(false);
+                }}
+                placeholder="Delivery address, special instructions…"
+                rows={3}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  data-testid="button-save-notes"
+                  disabled={updateNotes.isPending}
+                  onClick={saveNotes}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {updateNotes.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Check className="h-3 w-3" />
+                  )}
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingNotes(false)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : order.notes ? (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

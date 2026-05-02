@@ -9,7 +9,12 @@
 export interface UpdateBusinessProfileRequest {
   name?: string;
   whatsappPhoneNumberId?: string;
+  whatsappBusinessAccountId?: string;
+  whatsappApiToken?: string;
   mpesaShortCode?: string;
+  mpesaPasskey?: string;
+  mpesaConsumerKey?: string;
+  mpesaConsumerSecret?: string;
   currency?: string;
   timezone?: string;
   logoUrl?: string;

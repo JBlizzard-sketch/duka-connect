@@ -9,7 +9,19 @@ import {
   getListStaffQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, XCircle, Wifi, WifiOff, Plus, Trash2, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Wifi,
+  WifiOff,
+  Plus,
+  Trash2,
+  Loader2,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -29,26 +41,85 @@ function ConnectionStatus({ connected, label }: { connected: boolean; label: str
   );
 }
 
+function SecretField({
+  label,
+  fieldKey,
+  placeholder,
+  isSet,
+  value,
+  onChange,
+}: {
+  label: string;
+  fieldKey: string;
+  placeholder: string;
+  isSet: boolean;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs font-medium text-muted-foreground">{label}</label>
+        {isSet && !value && (
+          <span className="text-xs text-green-600 font-medium">● Set</span>
+        )}
+      </div>
+      <div className="relative">
+        <input
+          data-testid={`input-${fieldKey}`}
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={isSet ? "Leave blank to keep existing" : placeholder}
+          className="w-full border border-input rounded-md px-3 py-2 text-sm pr-9 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [showMpesa, setShowMpesa] = useState(false);
+
   const { data: profile, isLoading } = useGetBusinessProfile({
     query: { queryKey: getGetBusinessProfileQueryKey() },
   });
 
   const [form, setForm] = useState({
     name: "",
+    currency: "",
+    timezone: "",
     whatsappPhoneNumberId: "",
+    whatsappBusinessAccountId: "",
+    whatsappApiToken: "",
     mpesaShortCode: "",
+    mpesaPasskey: "",
+    mpesaConsumerKey: "",
+    mpesaConsumerSecret: "",
   });
 
   useEffect(() => {
     if (profile) {
-      setForm({
+      setForm((f) => ({
+        ...f,
         name: profile.name ?? "",
+        currency: profile.currency ?? "KES",
+        timezone: profile.timezone ?? "Africa/Nairobi",
         whatsappPhoneNumberId: profile.whatsappPhoneNumberId ?? "",
+        whatsappBusinessAccountId: profile.whatsappBusinessAccountId ?? "",
         mpesaShortCode: profile.mpesaShortCode ?? "",
-      });
+      }));
     }
   }, [profile]);
 
@@ -56,11 +127,34 @@ function ProfileSection() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetBusinessProfileQueryKey() });
+        setForm((f) => ({ ...f, whatsappApiToken: "", mpesaPasskey: "", mpesaConsumerKey: "", mpesaConsumerSecret: "" }));
         toast({ title: "Settings saved" });
       },
       onError: () => toast({ title: "Save failed", variant: "destructive" }),
     },
   });
+
+  function field(key: keyof typeof form) {
+    return {
+      value: form[key],
+      onChange: (v: string) => setForm((f) => ({ ...f, [key]: v })),
+    };
+  }
+
+  function handleSave() {
+    const data: Record<string, string | undefined> = {};
+    if (form.name) data.name = form.name;
+    if (form.currency) data.currency = form.currency;
+    if (form.timezone) data.timezone = form.timezone;
+    if (form.whatsappPhoneNumberId) data.whatsappPhoneNumberId = form.whatsappPhoneNumberId;
+    if (form.whatsappBusinessAccountId) data.whatsappBusinessAccountId = form.whatsappBusinessAccountId;
+    if (form.whatsappApiToken) data.whatsappApiToken = form.whatsappApiToken;
+    if (form.mpesaShortCode) data.mpesaShortCode = form.mpesaShortCode;
+    if (form.mpesaPasskey) data.mpesaPasskey = form.mpesaPasskey;
+    if (form.mpesaConsumerKey) data.mpesaConsumerKey = form.mpesaConsumerKey;
+    if (form.mpesaConsumerSecret) data.mpesaConsumerSecret = form.mpesaConsumerSecret;
+    updateProfile.mutate({ data });
+  }
 
   if (isLoading) {
     return <div className="h-32 bg-muted animate-pulse rounded-lg" />;
@@ -72,59 +166,168 @@ function ProfileSection() {
         <CardTitle className="text-sm font-semibold">Business Profile</CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4 space-y-4">
-        {/* Connection status */}
+        {/* Connection status row */}
         <div className="flex gap-4 flex-wrap">
-          <ConnectionStatus
-            connected={profile?.whatsappConnected ?? false}
-            label="WhatsApp"
-          />
-          <ConnectionStatus
-            connected={profile?.mpesaConnected ?? false}
-            label="Mpesa"
-          />
+          <ConnectionStatus connected={profile?.whatsappConnected ?? false} label="WhatsApp" />
+          <ConnectionStatus connected={profile?.mpesaConnected ?? false} label="Mpesa" />
         </div>
 
+        {/* Basic info */}
         <div className="space-y-3">
-          {[
-            { key: "name", label: "Business Name", placeholder: "Kamau's Pharmacy" },
-            {
-              key: "whatsappPhoneNumberId",
-              label: "WhatsApp Phone Number ID",
-              placeholder: "From Meta Business Dashboard",
-            },
-            {
-              key: "mpesaShortCode",
-              label: "Mpesa Short Code",
-              placeholder: "174379",
-            },
-          ].map(({ key, label, placeholder }) => (
-            <div key={key}>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                {label}
-              </label>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Business Name</label>
+            <input
+              data-testid="input-name"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Kamau's Pharmacy"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Currency</label>
               <input
-                data-testid={`input-${key}`}
-                value={form[key as keyof typeof form]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                placeholder={placeholder}
+                data-testid="input-currency"
+                value={form.currency}
+                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+                placeholder="KES"
                 className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
-          ))}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Timezone</label>
+              <input
+                data-testid="input-timezone"
+                value={form.timezone}
+                onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+                placeholder="Africa/Nairobi"
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* WhatsApp credentials — collapsible */}
+        <div className="border border-border rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowWhatsApp((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors text-sm font-medium"
+          >
+            <span className="flex items-center gap-2">
+              {profile?.whatsappConnected ? (
+                <Wifi className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              WhatsApp Credentials
+            </span>
+            {showWhatsApp ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </button>
+          {showWhatsApp && (
+            <div className="px-3 pb-3 pt-2 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Phone Number ID
+                </label>
+                <input
+                  data-testid="input-whatsappPhoneNumberId"
+                  value={form.whatsappPhoneNumberId}
+                  onChange={(e) => setForm((f) => ({ ...f, whatsappPhoneNumberId: e.target.value }))}
+                  placeholder="From Meta Business Dashboard"
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Business Account ID
+                </label>
+                <input
+                  data-testid="input-whatsappBusinessAccountId"
+                  value={form.whatsappBusinessAccountId}
+                  onChange={(e) => setForm((f) => ({ ...f, whatsappBusinessAccountId: e.target.value }))}
+                  placeholder="WABA ID from Meta"
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <SecretField
+                label="API Access Token"
+                fieldKey="whatsappApiToken"
+                placeholder="EAAxxxxxxxx…"
+                isSet={profile?.whatsappApiTokenSet ?? false}
+                {...field("whatsappApiToken")}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Mpesa credentials — collapsible */}
+        <div className="border border-border rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowMpesa((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors text-sm font-medium"
+          >
+            <span className="flex items-center gap-2">
+              {profile?.mpesaConnected ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              Mpesa Credentials
+            </span>
+            {showMpesa ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </button>
+          {showMpesa && (
+            <div className="px-3 pb-3 pt-2 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Short Code (Till/Paybill)</label>
+                <input
+                  data-testid="input-mpesaShortCode"
+                  value={form.mpesaShortCode}
+                  onChange={(e) => setForm((f) => ({ ...f, mpesaShortCode: e.target.value }))}
+                  placeholder="174379"
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <SecretField
+                label="Passkey"
+                fieldKey="mpesaPasskey"
+                placeholder="bfb279f9aa9bdbcf158e97dd71a46…"
+                isSet={profile?.mpesaPasskeySet ?? false}
+                {...field("mpesaPasskey")}
+              />
+              <SecretField
+                label="Consumer Key"
+                fieldKey="mpesaConsumerKey"
+                placeholder="Daraja app consumer key"
+                isSet={profile?.mpesaConsumerKeySet ?? false}
+                {...field("mpesaConsumerKey")}
+              />
+              <SecretField
+                label="Consumer Secret"
+                fieldKey="mpesaConsumerSecret"
+                placeholder="Daraja app consumer secret"
+                isSet={false}
+                {...field("mpesaConsumerSecret")}
+              />
+            </div>
+          )}
         </div>
 
         <button
           data-testid="button-save-settings"
           disabled={updateProfile.isPending}
-          onClick={() =>
-            updateProfile.mutate({
-              data: {
-                name: form.name || undefined,
-                whatsappPhoneNumberId: form.whatsappPhoneNumberId || undefined,
-                mpesaShortCode: form.mpesaShortCode || undefined,
-              },
-            })
-          }
+          onClick={handleSave}
           className="bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
         >
           {updateProfile.isPending ? "Saving..." : "Save Changes"}
