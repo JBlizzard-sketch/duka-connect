@@ -26,6 +26,18 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## Shipped Features (Batch 24)
+
+- **Top Products: per-product margin badge**: `GET /api/analytics/top-products` now left-joins `productsTable` to get `costPrice` and computes `avgUnitPrice` per product. Response includes `marginPct` (integer %, null when no costPrice set). AnalyticsPage shows a colour-coded pill badge (green ≥30%, amber ≥10%, red <10%) next to the revenue for each product row; hidden when margin is unknown.
+- **Payment Methods breakdown**: New `GET /api/analytics/payment-methods` endpoint left-joins `paymentsTable` (status=completed) to derive method — orders with a completed payment record → "mpesa", others → "cash". Returns `{ data: [{method, orderCount, revenue}] }`. AnalyticsPage shows a new card with a proportional stacked bar + colour-coded legend rows (green=M-Pesa, amber=Cash) showing order count, % share, and KES revenue.
+- **Staff Performance leaderboard**: New `GET /api/analytics/staff-performance` endpoint inner-joins `staffTable` on `assignedToId`, counting orders in active/completed statuses per staff member ordered by count desc. AnalyticsPage shows a new card with ranked rows, progress bars (violet), order count, and revenue per staff. Shows empty-state when no orders are assigned.
+
+## Shipped Features (Batch 23)
+
+- **Analytics: Gross Profit KPI card**: `GET /api/analytics/summary` now runs a 6th parallel query joining `orderItemsTable → productsTable` on `productId`, computing `sum(quantity × (unitPrice − costPrice))` for paid orders where `costPrice is not null`. Response includes `grossProfit` and `profitMarginPct` (null when no cost prices exist). AnalyticsPage shows a 6th "GROSS PROFIT" card in a 6-column grid; shows `—` with a "Set cost prices" sub-label until cost prices are entered, then shows KES amount + margin %.
+- **Order: editable delivery fee**: New `PATCH /api/orders/:id/delivery-fee` endpoint accepts `{ deliveryFee }`, recomputes `totalAmount = itemsTotal − discount + fee`, persists the update, and logs a `delivery_updated` event. `DeliveryFeeEditor` component on OrderDetailPage replaces the static display — shows current fee + an "Edit" / "Add fee" button (hidden for delivered/cancelled/paid). Inline editor has KES input, ✓/✗ buttons, Enter/Escape key shortcuts.
+- **Broadcasts: schedule send UI**: `NewBroadcastDialog` now has a `datetime-local` input labelled "Schedule (optional)" below the message composer. When a future time is set, a sub-label shows the formatted send time, the send button label changes to "Schedule Broadcast", and the toast says "Broadcast scheduled". The selected datetime is passed as `scheduleAt` in the POST body (backend already supported this field).
+
 ## Shipped Features (Batch 22)
 
 - **Product cost price + margin tracking**: New optional `cost_price` column on `products` table (DB migrated). Add/Edit Product dialogs include a "Cost Price (KES)" field; a live margin preview line ("Margin: X% · Profit: KES Y per unit") appears as you type. Each product card shows a colour-coded margin badge once costPrice is set (green ≥30%, amber ≥10%, red <10%) in place of the stock-value line.

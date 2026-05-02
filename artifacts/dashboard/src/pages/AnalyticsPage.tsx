@@ -136,6 +136,44 @@ export default function AnalyticsPage() {
   const hasCategoryData = (categoryData?.data ?? []).some((d) => d.revenue > 0);
   const maxCatRevenue = categoryData?.data?.[0]?.revenue ?? 1;
 
+  const { data: paymentMethodData } = useQuery({
+    queryKey: ["analytics", "payment-methods", period],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/payment-methods?period=${period}`);
+      return r.json() as Promise<{ data: { method: string; orderCount: number; revenue: number }[] }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: staffPerfData } = useQuery({
+    queryKey: ["analytics", "staff-performance", period],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/staff-performance?period=${period}`);
+      return r.json() as Promise<{ data: { staffId: number; staffName: string; role: string; orderCount: number; revenue: number }[] }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const hasPaymentData = (paymentMethodData?.data ?? []).some((d) => d.orderCount > 0);
+  const hasStaffData = (staffPerfData?.data ?? []).length > 0;
+  const maxStaffOrders = staffPerfData?.data?.[0]?.orderCount ?? 1;
+
+  const METHOD_COLORS: Record<string, string> = {
+    mpesa: "hsl(142 71% 45%)",
+    cash: "hsl(45 93% 47%)",
+    card: "hsl(221 83% 53%)",
+    bank: "hsl(262 83% 58%)",
+    unknown: "hsl(var(--muted-foreground))",
+  };
+  function methodLabel(m: string) {
+    if (m === "mpesa") return "M-Pesa";
+    if (m === "cash") return "Cash";
+    if (m === "card") return "Card";
+    if (m === "bank") return "Bank";
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  }
+  const pmTotal = (paymentMethodData?.data ?? []).reduce((s, d) => s + d.revenue, 0) || 1;
+
   const { toast } = useToast();
   const sendDailyReport = useMutation({
     mutationFn: async () => {
@@ -185,14 +223,24 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Revenue", value: formatCurrency(summary?.revenue ?? 0), change: summary?.revenueChange ?? 0 },
           { label: "Orders", value: String(summary?.orders ?? 0), change: summary?.ordersChange ?? 0 },
           { label: "Avg Order", value: formatCurrency(summary?.avgOrderValue ?? 0), change: 0 },
           { label: "New Customers", value: String(summary?.newCustomers ?? 0), change: (summary as { newCustomersChange?: number } | undefined)?.newCustomersChange ?? 0 },
           { label: "Repeat Buyers", value: String((summary as { repeatCustomers?: number } | undefined)?.repeatCustomers ?? 0), change: 0 },
-        ].map(({ label, value, change }) => (
+          {
+            label: "Gross Profit",
+            value: (summary as { grossProfit?: number } | undefined)?.grossProfit != null && (summary as { grossProfit?: number }).grossProfit! > 0
+              ? formatCurrency((summary as { grossProfit?: number }).grossProfit!)
+              : "—",
+            change: 0,
+            subtitle: (summary as { profitMarginPct?: number | null } | undefined)?.profitMarginPct != null
+              ? `${(summary as { profitMarginPct?: number | null }).profitMarginPct}% margin`
+              : "Set cost prices",
+          },
+        ].map(({ label, value, change, subtitle }) => (
           <Card key={label}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
@@ -202,6 +250,7 @@ export default function AnalyticsPage() {
               >
                 {value}
               </p>
+              {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
               <div className="flex items-center gap-1 mt-1">
                 <ChangeIndicator change={change} />
                 <span
@@ -409,15 +458,31 @@ export default function AnalyticsPage() {
               <div className="space-y-3">
                 {topProducts.products.map((p, i) => {
                   const pct = (Number(p.revenue) / maxRevenue) * 100;
+                  const mp = (p as unknown as { marginPct?: number | null }).marginPct;
+                  const marginBadgeCls =
+                    mp == null
+                      ? ""
+                      : mp >= 30
+                      ? "bg-green-100 text-green-700"
+                      : mp >= 10
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-600";
                   return (
                     <div key={p.productId ?? i} data-testid={`row-product-${i}`}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium truncate max-w-[160px]">
+                        <span className="text-xs font-medium truncate max-w-[120px]">
                           {p.productName}
                         </span>
-                        <span className="text-xs font-semibold text-primary">
-                          {formatCurrency(Number(p.revenue))}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                          {mp != null && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${marginBadgeCls}`}>
+                              {mp}%
+                            </span>
+                          )}
+                          <span className="text-xs font-semibold text-primary">
+                            {formatCurrency(Number(p.revenue))}
+                          </span>
+                        </div>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
@@ -513,6 +578,95 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Payment methods + Staff performance */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Payment method breakdown */}
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2">
+            <CardTitle className="text-sm font-semibold">Payment Methods</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {!hasPaymentData ? (
+              <p className="text-sm text-muted-foreground">No paid orders yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {/* Stacked bar across full width */}
+                <div className="flex h-3 rounded-full overflow-hidden w-full">
+                  {(paymentMethodData?.data ?? []).map((d) => (
+                    <div
+                      key={d.method}
+                      style={{
+                        width: `${(d.revenue / pmTotal) * 100}%`,
+                        backgroundColor: METHOD_COLORS[d.method] ?? METHOD_COLORS.unknown,
+                      }}
+                    />
+                  ))}
+                </div>
+                {(paymentMethodData?.data ?? []).map((d) => (
+                  <div key={d.method} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: METHOD_COLORS[d.method] ?? METHOD_COLORS.unknown }}
+                      />
+                      <span className="text-xs font-medium">{methodLabel(d.method)}</span>
+                      <span className="text-xs text-muted-foreground">{d.orderCount} orders</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground">
+                        {Math.round((d.revenue / pmTotal) * 100)}%
+                      </span>
+                      <span className="text-xs font-semibold text-primary">
+                        {formatCurrency(d.revenue)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Staff performance leaderboard */}
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2">
+            <CardTitle className="text-sm font-semibold">Staff Performance</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {!hasStaffData ? (
+              <p className="text-sm text-muted-foreground">No assigned orders yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {(staffPerfData?.data ?? []).map((s, i) => {
+                  const pct = (s.orderCount / maxStaffOrders) * 100;
+                  return (
+                    <div key={s.staffId}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">{i + 1}</span>
+                          <span className="text-xs font-medium truncate max-w-[120px]">{s.staffName}</span>
+                          <span className="text-[10px] text-muted-foreground capitalize shrink-0">{s.role}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-1">
+                          <span className="text-xs text-muted-foreground">{s.orderCount} orders</span>
+                          <span className="text-xs font-semibold text-primary">{formatCurrency(s.revenue)}</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-violet-500 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

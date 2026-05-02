@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, orderItemsTable, productsTable, productVariantsTable, businessesTable, customersTable } from "@workspace/db";
+import { ordersTable, orderItemsTable, productsTable, productVariantsTable, businessesTable, customersTable, paymentsTable, staffTable } from "@workspace/db";
 import { eq, gte, sql, count, sum, desc, and } from "drizzle-orm";
 import {
   GetAnalyticsSummaryQueryParams,
@@ -49,7 +49,7 @@ router.get("/analytics/summary", async (req, res) => {
   const periodStart = getPeriodStart(period);
   const prevPeriodStart = getPrevPeriodStart(period, periodStart);
 
-  const [current, previous, newCusts, prevNewCusts, repeatCusts] = await Promise.all([
+  const [current, previous, newCusts, prevNewCusts, repeatCusts, grossProfitRows] = await Promise.all([
     db
       .select({
         revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
@@ -98,6 +98,23 @@ router.get("/analytics/summary", async (req, res) => {
       )
       .groupBy(ordersTable.customerId)
       .having(sql`count(*) >= 2`),
+    db
+      .select({
+        grossProfit: sql<number>`coalesce(sum(
+          cast(${orderItemsTable.quantity} as numeric) *
+          (cast(${orderItemsTable.unitPrice} as numeric) - coalesce(cast(${productsTable.costPrice} as numeric), 0))
+        ), 0)`,
+      })
+      .from(orderItemsTable)
+      .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
+      .leftJoin(productsTable, eq(productsTable.id, orderItemsTable.productId))
+      .where(
+        and(
+          gte(ordersTable.createdAt, periodStart),
+          eq(ordersTable.status, "paid"),
+          sql`${productsTable.costPrice} is not null`
+        )
+      ),
   ]);
 
   const revenue = Number(current[0]?.revenue ?? 0);
@@ -146,20 +163,30 @@ router.get("/analytics/top-products", async (req, res) => {
       quantitySold: sql<number>`sum(cast(${orderItemsTable.quantity} as numeric))`,
       revenue: sql<number>`sum(cast(${orderItemsTable.totalPrice} as numeric))`,
       orderCount: count(),
+      costPrice: productsTable.costPrice,
+      avgUnitPrice: sql<number>`avg(cast(${orderItemsTable.unitPrice} as numeric))`,
     })
     .from(orderItemsTable)
     .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
+    .leftJoin(productsTable, eq(productsTable.id, orderItemsTable.productId))
     .where(
       and(
         gte(ordersTable.createdAt, periodStart),
         eq(ordersTable.status, "paid")
       )
     )
-    .groupBy(orderItemsTable.productId, orderItemsTable.productName)
+    .groupBy(orderItemsTable.productId, orderItemsTable.productName, productsTable.costPrice)
     .orderBy(desc(sql`sum(cast(${orderItemsTable.totalPrice} as numeric))`))
     .limit(limit);
 
-  res.json({ products: topProducts, period });
+  const products = topProducts.map((p) => {
+    const avgPrice = Number(p.avgUnitPrice ?? 0);
+    const cp = p.costPrice != null ? Number(p.costPrice) : null;
+    const marginPct = cp != null && avgPrice > 0 ? Math.round(((avgPrice - cp) / avgPrice) * 100) : null;
+    return { ...p, marginPct };
+  });
+
+  res.json({ products, period });
 });
 
 router.get("/analytics/revenue-by-category", async (req, res) => {
@@ -268,6 +295,81 @@ router.get("/analytics/revenue-by-hour", async (req, res) => {
   }));
 
   res.json({ data, period });
+});
+
+// GET /api/analytics/payment-methods
+// Breakdown of paid orders by payment method (cash vs mpesa).
+// Method is derived from paymentsTable: completed Mpesa payment → "mpesa", else → "cash".
+router.get("/analytics/payment-methods", async (req, res) => {
+  const period = (req.query["period"] as string) ?? "week";
+  const periodStart = getPeriodStart(period);
+
+  const rows = await db
+    .select({
+      method: sql<string>`case when ${paymentsTable.id} is not null then 'mpesa' else 'cash' end`,
+      orderCount: count(),
+      revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
+    })
+    .from(ordersTable)
+    .leftJoin(
+      paymentsTable,
+      and(
+        eq(paymentsTable.orderId, ordersTable.id),
+        eq(paymentsTable.status, "completed")
+      )
+    )
+    .where(
+      and(
+        gte(ordersTable.createdAt, periodStart),
+        sql`${ordersTable.status} in ('paid', 'delivered')`
+      )
+    )
+    .groupBy(sql`case when ${paymentsTable.id} is not null then 'mpesa' else 'cash' end`);
+
+  const data = rows.map((r) => ({
+    method: r.method ?? "cash",
+    orderCount: Number(r.orderCount),
+    revenue: Number(r.revenue),
+  }));
+
+  res.json({ data, period });
+});
+
+// GET /api/analytics/staff-performance
+// Per-staff order counts and revenue for assigned orders.
+router.get("/analytics/staff-performance", async (req, res) => {
+  const period = (req.query["period"] as string) ?? "week";
+  const periodStart = getPeriodStart(period);
+
+  const rows = await db
+    .select({
+      staffId: staffTable.id,
+      staffName: staffTable.name,
+      role: staffTable.role,
+      orderCount: count(),
+      revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
+    })
+    .from(ordersTable)
+    .innerJoin(staffTable, eq(staffTable.id, ordersTable.assignedToId))
+    .where(
+      and(
+        gte(ordersTable.createdAt, periodStart),
+        sql`${ordersTable.status} in ('paid', 'delivered', 'confirmed', 'preparing', 'ready')`
+      )
+    )
+    .groupBy(staffTable.id, staffTable.name, staffTable.role)
+    .orderBy(desc(count()));
+
+  res.json({
+    data: rows.map((r) => ({
+      staffId: r.staffId,
+      staffName: r.staffName,
+      role: r.role,
+      orderCount: Number(r.orderCount),
+      revenue: Number(r.revenue),
+    })),
+    period,
+  });
 });
 
 // POST /api/analytics/daily-report

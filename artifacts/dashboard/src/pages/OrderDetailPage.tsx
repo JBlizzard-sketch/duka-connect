@@ -785,12 +785,7 @@ export default function OrderDetailPage() {
           ) : (
             <p className="text-muted-foreground italic">No delivery address set.</p>
           )}
-          {order.deliveryFee && Number(order.deliveryFee) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Delivery fee</span>
-              <span className="font-medium">{formatCurrency(Number(order.deliveryFee))}</span>
-            </div>
-          )}
+          <DeliveryFeeEditor order={order} />
         </CardContent>
       </Card>
 
@@ -963,6 +958,85 @@ interface OrderEvent {
   toStatus: string | null;
   description: string;
   createdAt: string;
+}
+
+function DeliveryFeeEditor({ order }: { order: { id: number; deliveryFee?: string | null; status: string } }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [feeInput, setFeeInput] = useState("");
+  const isLocked = ["delivered", "cancelled", "paid"].includes(order.status);
+
+  const saveFee = useMutation({
+    mutationFn: async (fee: number) => {
+      const r = await fetch(`${BASE}/api/orders/${order.id}/delivery-fee`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliveryFee: fee }),
+      });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(order.id) });
+      toast({ title: "Delivery fee updated" });
+    },
+    onError: () => toast({ title: "Failed to update delivery fee", variant: "destructive" }),
+  });
+
+  const currentFee = Number(order.deliveryFee ?? 0);
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <span className="text-muted-foreground text-sm shrink-0">Delivery fee</span>
+        <div className="flex items-center gap-1 ml-auto">
+          <span className="text-xs text-muted-foreground">KES</span>
+          <input
+            type="number"
+            min="0"
+            step="50"
+            autoFocus
+            value={feeInput}
+            onChange={(e) => setFeeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveFee.mutate(Number(feeInput) || 0);
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="w-24 border border-input rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            onClick={() => saveFee.mutate(Number(feeInput) || 0)}
+            disabled={saveFee.isPending}
+            className="p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button onClick={() => setEditing(false)} className="p-1 rounded hover:bg-muted">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-muted-foreground text-sm">Delivery fee</span>
+      <div className="flex items-center gap-2">
+        {currentFee > 0 && <span className="font-medium text-sm">{formatCurrency(currentFee)}</span>}
+        {!isLocked && (
+          <button
+            onClick={() => { setFeeInput(currentFee > 0 ? String(currentFee) : ""); setEditing(true); }}
+            className="text-xs text-muted-foreground hover:text-primary border border-border px-2 py-0.5 rounded hover:border-primary/50 transition-colors"
+          >
+            {currentFee > 0 ? "Edit" : "Add fee"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const EVENT_ICONS: Record<string, string> = {

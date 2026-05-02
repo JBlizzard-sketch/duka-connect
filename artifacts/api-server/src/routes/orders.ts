@@ -557,6 +557,39 @@ router.patch("/orders/:id/discount", async (req, res) => {
   res.json({ ok: true, discountAmount: discount, totalAmount: newTotal });
 });
 
+router.patch("/orders/:id/delivery-fee", async (req, res) => {
+  const parsed = GetOrderParams.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues }); return; }
+  const { id } = parsed.data;
+
+  const rawFee = (req.body as Record<string, unknown>).deliveryFee;
+  const feeNum = typeof rawFee === "number" ? rawFee : Number(rawFee);
+  if (isNaN(feeNum) || feeNum < 0) { res.status(400).json({ error: "deliveryFee must be a non-negative number" }); return; }
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.businessId, 1))).limit(1);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (["delivered", "cancelled"].includes(order.status)) {
+    res.status(409).json({ error: "Cannot modify a delivered or cancelled order" }); return;
+  }
+
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+  const itemsTotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
+  const discount = Number(order.discountAmount ?? 0);
+  const newTotal = Math.max(0, itemsTotal - discount + feeNum);
+
+  await db.update(ordersTable)
+    .set({ deliveryFee: feeNum > 0 ? String(feeNum) : null, totalAmount: String(newTotal), updatedAt: new Date() })
+    .where(eq(ordersTable.id, id));
+
+  await db.insert(orderEventsTable).values({
+    orderId: id,
+    event: "delivery_updated",
+    description: feeNum === 0 ? "Delivery fee removed" : `Delivery fee set: KES ${Math.round(feeNum).toLocaleString()}`,
+  }).catch(() => {});
+
+  res.json({ ok: true, deliveryFee: feeNum > 0 ? feeNum : null, totalAmount: newTotal });
+});
+
 router.get("/orders/:id/events", async (req, res) => {
   const parsed = GetOrderParams.safeParse(req.params);
   if (!parsed.success) {

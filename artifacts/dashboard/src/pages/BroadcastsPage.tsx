@@ -136,6 +136,7 @@ function NewBroadcastDialog() {
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<"all" | "recent" | "top_customers" | "loyal" | "vip" | "new_customers">("all");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -160,8 +161,9 @@ function NewBroadcastDialog() {
         setOpen(false);
         setMessage("");
         setSegment("all");
+        setScheduleAt("");
         queryClient.invalidateQueries({ queryKey: getListBroadcastsQueryKey() });
-        toast({ title: "Broadcast sent" });
+        toast({ title: scheduleAt ? "Broadcast scheduled" : "Broadcast sent" });
       },
       onError: () => toast({ title: "Failed to send broadcast", variant: "destructive" }),
     },
@@ -289,23 +291,46 @@ function NewBroadcastDialog() {
               </p>
             </div>
 
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Schedule (optional)
+              </label>
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              {scheduleAt && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Will send at {new Date(scheduleAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              )}
+            </div>
             <button
               data-testid="button-send-broadcast"
               disabled={!message.trim() || isOverLimit || createBroadcast.isPending}
               onClick={() =>
-                createBroadcast.mutate({ data: { message: message.trim(), segment } })
+                createBroadcast.mutate({
+                  data: {
+                    message: message.trim(),
+                    segment,
+                    ...(scheduleAt ? { scheduleAt } : {}),
+                  } as Parameters<typeof createBroadcast.mutate>[0]["data"],
+                })
               }
               className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium py-2.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
             >
               {createBroadcast.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending...
+                  {scheduleAt ? "Scheduling..." : "Sending..."}
                 </>
               ) : (
                 <>
                   <Radio className="h-4 w-4" />
-                  Send Broadcast
+                  {scheduleAt ? "Schedule Broadcast" : "Send Broadcast"}
                 </>
               )}
             </button>
