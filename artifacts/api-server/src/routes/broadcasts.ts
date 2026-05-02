@@ -38,6 +38,31 @@ router.get("/broadcasts", async (req, res) => {
   });
 });
 
+router.get("/broadcasts/segment-preview", async (req, res) => {
+  const allCustomers = await db.select().from(customersTable);
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const segmentCount = (seg: string) => {
+    switch (seg) {
+      case "all": return allCustomers.length;
+      case "recent": return allCustomers.filter(c => c.lastOrderAt && c.lastOrderAt >= thirtyDaysAgo).length;
+      case "top_customers": return allCustomers.filter(c => Number(c.totalSpend) > 5000).length;
+      case "loyal": return allCustomers.filter(c => c.loyaltyPoints >= 50).length;
+      case "vip": return allCustomers.filter(c => c.totalOrders >= 10 || Number(c.totalSpend) >= 10000).length;
+      case "new_customers": return allCustomers.filter(c => c.totalOrders >= 1 && c.totalOrders <= 2).length;
+      default: return 0;
+    }
+  };
+
+  res.json({
+    segments: ["all", "recent", "top_customers", "loyal", "vip", "new_customers"].map(s => ({
+      segment: s,
+      customerCount: segmentCount(s),
+    })),
+  });
+});
+
 router.post("/broadcasts", async (req, res) => {
   const parsed = CreateBroadcastBody.safeParse(req.body);
   if (!parsed.success) {

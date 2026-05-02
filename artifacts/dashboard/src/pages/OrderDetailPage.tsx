@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, useListStaff, ge
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send, Lock, Clock, ArrowRight } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send, Lock, Clock, ArrowRight, Minus, Plus, Tag } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
@@ -46,6 +46,10 @@ export default function OrderDetailPage() {
   const [editingDelivery, setEditingDelivery] = useState(false);
   const [deliveryInput, setDeliveryInput] = useState("");
   const [assignedToId, setAssignedToId] = useState<number | null | undefined>(undefined);
+  const [editingItems, setEditingItems] = useState(false);
+  const [draftQtys, setDraftQtys] = useState<Record<number, number>>({});
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
 
   const { data: staffData } = useListStaff();
 
@@ -142,6 +146,58 @@ export default function OrderDetailPage() {
     },
     onSuccess: () => toast({ title: "Receipt sent on WhatsApp" }),
     onError: () => toast({ title: "Failed to send receipt", variant: "destructive" }),
+  });
+
+  const saveItems = useMutation({
+    mutationFn: async (items: { id: number; quantity: number }[]) => {
+      const r = await fetch(`${BASE}/api/orders/${id}/items`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (!r.ok) throw new Error("Failed to save items");
+      return r.json();
+    },
+    onSuccess: () => {
+      setEditingItems(false);
+      setDraftQtys({});
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+      toast({ title: "Items updated" });
+    },
+    onError: () => toast({ title: "Failed to update items", variant: "destructive" }),
+  });
+
+  function startEditItems() {
+    const qtys: Record<number, number> = {};
+    order?.items?.forEach((it) => { if (it.id) qtys[it.id] = it.quantity; });
+    setDraftQtys(qtys);
+    setEditingItems(true);
+  }
+
+  function commitItemEdit() {
+    const items = Object.entries(draftQtys).map(([idStr, quantity]) => ({ id: Number(idStr), quantity }));
+    saveItems.mutate(items);
+  }
+
+  const applyDiscount = useMutation({
+    mutationFn: async (discountAmount: number) => {
+      const r = await fetch(`${BASE}/api/orders/${id}/discount`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discountAmount }),
+      });
+      if (!r.ok) throw new Error("Failed to apply discount");
+      return r.json();
+    },
+    onSuccess: () => {
+      setEditingDiscount(false);
+      setDiscountInput("");
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: getGetOrdersSummaryQueryKey() });
+      toast({ title: "Discount applied" });
+    },
+    onError: () => toast({ title: "Failed to apply discount", variant: "destructive" }),
   });
 
   const initiatePayment = useInitiatePayment({
@@ -379,43 +435,170 @@ export default function OrderDetailPage() {
 
       {/* Items */}
       <Card data-print-hide>
-        <CardHeader className="px-4 pt-4 pb-2">
+        <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold">
             Items ({order.items?.length ?? 0})
           </CardTitle>
+          {!editingItems && !["delivered", "cancelled", "paid"].includes(order.status) && (
+            <button
+              onClick={startEditItems}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+          )}
         </CardHeader>
         <CardContent className="px-4 pb-4">
-          <div className="divide-y divide-border">
-            {order.items?.map((item, idx) => (
-              <div
-                key={idx}
-                data-testid={`row-item-${idx}`}
-                className="py-2 flex items-center justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{item.productName}</p>
-                  {item.variantName && (
-                    <p className="text-xs text-muted-foreground">{item.variantName}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {item.quantity} × {formatCurrency(Number(item.unitPrice))}
-                  </p>
-                </div>
-                <p className="text-sm font-semibold shrink-0 ml-4">
-                  {formatCurrency(Number(item.totalPrice))}
-                </p>
+          {editingItems ? (
+            <div className="space-y-2">
+              {order.items?.map((item) => {
+                const itemId = item.id as number | undefined;
+                if (!itemId) return null;
+                const qty = draftQtys[itemId] ?? item.quantity;
+                return (
+                  <div key={itemId} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.productName}</p>
+                      {item.variantName && <p className="text-xs text-muted-foreground">{item.variantName}</p>}
+                      <p className="text-xs text-muted-foreground">{formatCurrency(Number(item.unitPrice))} each</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setDraftQtys((prev) => ({ ...prev, [itemId]: Math.max(0, (prev[itemId] ?? item.quantity) - 1) }))}
+                        className="w-6 h-6 flex items-center justify-center rounded border border-border bg-background hover:bg-muted transition-colors text-xs font-bold"
+                      >
+                        <Minus className="h-2.5 w-2.5" />
+                      </button>
+                      <span className={`w-6 text-center text-sm font-semibold ${qty === 0 ? "text-red-500 line-through" : ""}`}>
+                        {qty}
+                      </span>
+                      <button
+                        onClick={() => setDraftQtys((prev) => ({ ...prev, [itemId]: (prev[itemId] ?? item.quantity) + 1 }))}
+                        className="w-6 h-6 flex items-center justify-center rounded border border-border bg-background hover:bg-primary/10 hover:text-primary transition-colors text-xs font-bold"
+                      >
+                        <Plus className="h-2.5 w-2.5" />
+                      </button>
+                      <span className="text-sm font-semibold w-16 text-right">
+                        {formatCurrency(Number(item.unitPrice) * qty)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex gap-2 pt-2">
+                <button
+                  disabled={saveItems.isPending}
+                  onClick={commitItemEdit}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {saveItems.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Save changes
+                </button>
+                <button
+                  onClick={() => { setEditingItems(false); setDraftQtys({}); }}
+                  className="text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
-            ))}
-          </div>
-          <div className="pt-3 mt-2 border-t border-border flex justify-between items-center">
-            <span className="text-sm font-semibold">Total</span>
-            <span
-              data-testid="text-order-total"
-              className="text-base font-bold text-primary"
-            >
-              {formatCurrency(Number(order.totalAmount))}
-            </span>
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-border">
+                {order.items?.map((item, idx) => (
+                  <div
+                    key={idx}
+                    data-testid={`row-item-${idx}`}
+                    className="py-2 flex items-center justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{item.productName}</p>
+                      {item.variantName && (
+                        <p className="text-xs text-muted-foreground">{item.variantName}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {item.quantity} × {formatCurrency(Number(item.unitPrice))}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold shrink-0 ml-4">
+                      {formatCurrency(Number(item.totalPrice))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-3 mt-2 border-t border-border space-y-1.5">
+                {Number(order.deliveryFee ?? 0) > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Delivery fee</span>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(Number(order.deliveryFee))}</span>
+                  </div>
+                )}
+                {Number((order as typeof order & { discountAmount?: string | number }).discountAmount ?? 0) > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-green-700 flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      Discount
+                    </span>
+                    <span className="text-xs font-medium text-green-700">
+                      − {formatCurrency(Number((order as typeof order & { discountAmount?: string | number }).discountAmount))}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-1 border-t border-border/50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">Total</span>
+                    {!editingDiscount && !["delivered", "cancelled", "paid"].includes(order.status) && (
+                      <button
+                        onClick={() => {
+                          setDiscountInput(String(Number((order as typeof order & { discountAmount?: string | number }).discountAmount ?? 0) || ""));
+                          setEditingDiscount(true);
+                        }}
+                        className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Tag className="h-2.5 w-2.5" />
+                        {Number((order as typeof order & { discountAmount?: string | number }).discountAmount ?? 0) > 0 ? "Edit discount" : "Add discount"}
+                      </button>
+                    )}
+                  </div>
+                  <span
+                    data-testid="text-order-total"
+                    className="text-base font-bold text-primary"
+                  >
+                    {formatCurrency(Number(order.totalAmount))}
+                  </span>
+                </div>
+                {editingDiscount && (
+                  <div className="pt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground shrink-0">Discount (KES):</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={discountInput}
+                      onChange={(e) => setDiscountInput(e.target.value)}
+                      placeholder="0"
+                      className="w-24 border border-input rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      autoFocus
+                    />
+                    <button
+                      disabled={applyDiscount.isPending}
+                      onClick={() => applyDiscount.mutate(Number(discountInput) || 0)}
+                      className="flex items-center gap-1 text-xs font-medium bg-green-600 text-white px-2.5 py-1 rounded-md hover:bg-green-700 disabled:opacity-60 transition-colors"
+                    >
+                      {applyDiscount.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      Apply
+                    </button>
+                    <button
+                      onClick={() => { setEditingDiscount(false); setDiscountInput(""); }}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

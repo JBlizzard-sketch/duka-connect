@@ -30,6 +30,7 @@ export const ordersTable = pgTable("orders", {
   internalNotes: text("internal_notes"),
   deliveryAddress: text("delivery_address"),
   deliveryFee: numeric("delivery_fee", { precision: 10, scale: 2 }).default("0"),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }).default("0"),
   assignedToId: integer("assigned_to_id").references(() => staffTable.id),
   whatsappMessageId: varchar("whatsapp_message_id", { length: 128 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),

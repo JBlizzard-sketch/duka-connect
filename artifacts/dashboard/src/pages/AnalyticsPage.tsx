@@ -185,12 +185,13 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "Revenue", value: formatCurrency(summary?.revenue ?? 0), change: summary?.revenueChange ?? 0 },
           { label: "Orders", value: String(summary?.orders ?? 0), change: summary?.ordersChange ?? 0 },
           { label: "Avg Order", value: formatCurrency(summary?.avgOrderValue ?? 0), change: 0 },
           { label: "New Customers", value: String(summary?.newCustomers ?? 0), change: (summary as { newCustomersChange?: number } | undefined)?.newCustomersChange ?? 0 },
+          { label: "Repeat Buyers", value: String((summary as { repeatCustomers?: number } | undefined)?.repeatCustomers ?? 0), change: 0 },
         ].map(({ label, value, change }) => (
           <Card key={label}>
             <CardContent className="p-4">

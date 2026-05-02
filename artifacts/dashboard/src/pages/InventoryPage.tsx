@@ -47,7 +47,7 @@ function EditProductDialog({
   product,
   onUpdated,
 }: {
-  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string; description?: string | null; imageUrl?: string | null };
+  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string; description?: string | null; imageUrl?: string | null; costPrice?: number | null };
   onUpdated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +58,7 @@ function EditProductDialog({
     unit: product.unit,
     description: product.description ?? "",
     imageUrl: product.imageUrl ?? "",
+    costPrice: product.costPrice != null ? String(product.costPrice) : "",
   });
   const { toast } = useToast();
   const updateProduct = useUpdateProduct({
@@ -80,6 +81,7 @@ function EditProductDialog({
       unit: product.unit,
       description: product.description ?? "",
       imageUrl: product.imageUrl ?? "",
+      costPrice: product.costPrice != null ? String(product.costPrice) : "",
     });
     setOpen(true);
   }
@@ -104,7 +106,8 @@ function EditProductDialog({
           {[
             { key: "name", label: "Product Name", placeholder: "e.g. Panadol 500mg" },
             { key: "category", label: "Category", placeholder: "e.g. Medicine" },
-            { key: "basePrice", label: "Price (KES)", placeholder: "50", type: "number" },
+            { key: "basePrice", label: "Selling Price (KES)", placeholder: "50", type: "number" },
+            { key: "costPrice", label: "Cost Price (KES, optional)", placeholder: "30", type: "number" },
             { key: "unit", label: "Unit", placeholder: "piece" },
           ].map(({ key, label, placeholder, type }) => (
             <div key={key}>
@@ -118,6 +121,12 @@ function EditProductDialog({
               />
             </div>
           ))}
+          {form.costPrice && form.basePrice && Number(form.basePrice) > 0 && Number(form.costPrice) >= 0 && (
+            <p className="text-xs text-muted-foreground">
+              Margin: {Math.round(((Number(form.basePrice) - Number(form.costPrice)) / Number(form.basePrice)) * 100)}%
+              · Profit: KES {Math.round(Number(form.basePrice) - Number(form.costPrice)).toLocaleString()} per {form.unit || "unit"}
+            </p>
+          )}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Description (optional)</label>
             <textarea
@@ -158,7 +167,8 @@ function EditProductDialog({
                   unit: form.unit,
                   description: form.description || undefined,
                   imageUrl: form.imageUrl || undefined,
-                },
+                  ...(form.costPrice !== "" ? { costPrice: Number(form.costPrice) } : { costPrice: null }),
+                } as Parameters<typeof updateProduct.mutate>[0]["data"],
               })
             }
             className="w-full bg-primary text-primary-foreground text-sm font-medium py-2 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
@@ -177,6 +187,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
     name: "",
     category: "",
     basePrice: "",
+    costPrice: "",
     unit: "piece",
     initialStock: "",
     lowStockThreshold: "5",
@@ -188,7 +199,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", category: "", basePrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5", description: "", imageUrl: "" });
+        setForm({ name: "", category: "", basePrice: "", costPrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5", description: "", imageUrl: "" });
         onCreated();
         toast({ title: "Product added" });
       },
@@ -215,7 +226,8 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
           {[
             { key: "name", label: "Product Name", placeholder: "e.g. Panadol 500mg" },
             { key: "category", label: "Category", placeholder: "e.g. Medicine" },
-            { key: "basePrice", label: "Price (KES)", placeholder: "50", type: "number" },
+            { key: "basePrice", label: "Selling Price (KES)", placeholder: "50", type: "number" },
+            { key: "costPrice", label: "Cost Price (KES, optional)", placeholder: "30", type: "number" },
             { key: "unit", label: "Unit", placeholder: "piece" },
             { key: "initialStock", label: "Initial Stock", placeholder: "100", type: "number" },
             { key: "lowStockThreshold", label: "Low Stock Alert At", placeholder: "5", type: "number" },
@@ -260,6 +272,12 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
               />
             )}
           </div>
+          {form.costPrice && form.basePrice && Number(form.basePrice) > 0 && Number(form.costPrice) >= 0 && (
+            <p className="text-xs text-muted-foreground">
+              Margin: {Math.round(((Number(form.basePrice) - Number(form.costPrice)) / Number(form.basePrice)) * 100)}%
+              · Profit: KES {Math.round(Number(form.basePrice) - Number(form.costPrice)).toLocaleString()} per {form.unit || "unit"}
+            </p>
+          )}
           <button
             data-testid="button-submit-product"
             disabled={!form.name || !form.basePrice || createProduct.isPending}
@@ -274,7 +292,8 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
                   lowStockThreshold: form.lowStockThreshold ? Number(form.lowStockThreshold) : 5,
                   description: form.description || undefined,
                   imageUrl: form.imageUrl || undefined,
-                },
+                  ...(form.costPrice !== "" ? { costPrice: Number(form.costPrice) } : {}),
+                } as Parameters<typeof createProduct.mutate>[0]["data"],
               })
             }
             className="w-full bg-primary text-primary-foreground text-sm font-medium py-2 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
@@ -879,8 +898,27 @@ export default function InventoryPage() {
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [sendingAlert, setSendingAlert] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  async function sendRestockAlert() {
+    setSendingAlert(true);
+    try {
+      const r = await fetch(`${BASE}/api/products/restock-alert`, { method: "POST" });
+      const data = await r.json() as { ok: boolean; sent?: boolean; productCount?: number; note?: string; message?: string };
+      if (!r.ok) throw new Error("Failed");
+      if (data.sent) {
+        toast({ title: `Restock alert sent via WhatsApp (${data.productCount} items)` });
+      } else {
+        toast({ title: `Alert ready (${data.productCount} items)`, description: data.note ?? "Configure owner WhatsApp in Settings to auto-send." });
+      }
+    } catch {
+      toast({ title: "Failed to send alert", variant: "destructive" });
+    } finally {
+      setSendingAlert(false);
+    }
+  }
 
   const { data, isLoading } = useListProducts({
     search: search || undefined,
@@ -973,6 +1011,14 @@ export default function InventoryPage() {
             className="text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-300 px-2.5 py-1 rounded-md hover:bg-amber-100 transition-colors shrink-0"
           >
             View low stock
+          </button>
+          <button
+            onClick={sendRestockAlert}
+            disabled={sendingAlert}
+            className="text-xs font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 px-2.5 py-1 rounded-md transition-colors shrink-0 flex items-center gap-1"
+          >
+            <svg viewBox="0 0 24 24" className="h-3 w-3 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.985-1.31A9.945 9.945 0 0011.999 22C17.523 22 22 17.523 22 12c0-5.522-4.477-10-10.001-10z"/></svg>
+            {sendingAlert ? "Sending…" : "Send alert"}
           </button>
         </div>
       )}
@@ -1106,6 +1152,9 @@ export default function InventoryPage() {
                           unit: product.unit,
                           description: (product as typeof product & { description?: string | null }).description,
                           imageUrl: product.imageUrl,
+                          costPrice: (product as typeof product & { costPrice?: string | null }).costPrice != null
+                            ? Number((product as typeof product & { costPrice?: string | null }).costPrice)
+                            : null,
                         }}
                         onUpdated={() =>
                           queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
@@ -1166,23 +1215,63 @@ export default function InventoryPage() {
                   <div className="mt-3 flex items-end justify-between">
                     <div>
                       <p className="text-xs text-muted-foreground">Stock</p>
-                      <p
-                        data-testid={`text-stock-${product.id}`}
-                        className={cn(
-                          "text-lg font-bold",
-                          isLow ? "text-amber-600" : "text-foreground"
-                        )}
-                      >
-                        {stock}
-                        <span className="text-xs font-normal text-muted-foreground ml-1">
-                          {product.unit}
-                        </span>
-                      </p>
-                      {isLow && (
-                        <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
-                          <AlertTriangle className="h-3 w-3" />
-                          Low stock
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          data-testid={`button-stock-minus-${product.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetch(`${BASE}/api/products/${product.id}/stock`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ adjustment: -1 }),
+                            }).then(() => queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() }));
+                          }}
+                          disabled={stock <= 0}
+                          className="w-5 h-5 flex items-center justify-center rounded border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs font-bold disabled:opacity-30"
+                          title="Remove 1 unit"
+                        >
+                          <Minus className="h-2.5 w-2.5" />
+                        </button>
+                        <p
+                          data-testid={`text-stock-${product.id}`}
+                          className={cn(
+                            "text-lg font-bold",
+                            isLow ? "text-amber-600" : "text-foreground"
+                          )}
+                        >
+                          {stock}
+                          <span className="text-xs font-normal text-muted-foreground ml-1">
+                            {product.unit}
+                          </span>
                         </p>
+                        <button
+                          data-testid={`button-stock-plus-${product.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetch(`${BASE}/api/products/${product.id}/stock`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ adjustment: 1 }),
+                            }).then(() => queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() }));
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded border border-border bg-background hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors text-xs font-bold"
+                          title="Add 1 unit"
+                        >
+                          <Plus className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                      {isLow && (
+                        <div className="mt-0.5 space-y-0.5">
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Low stock
+                          </p>
+                          {threshold > stock && (
+                            <p className="text-[10px] text-amber-700">
+                              Restock {threshold - stock} {product.unit} · {formatCurrency((threshold - stock) * Number(product.basePrice))}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div className="text-right">
@@ -1193,6 +1282,22 @@ export default function InventoryPage() {
                       >
                         {formatCurrency(Number(product.basePrice))}
                       </p>
+                      {(() => {
+                        const cp = (product as typeof product & { costPrice?: string | null }).costPrice;
+                        if (cp != null && Number(product.basePrice) > 0) {
+                          const margin = Math.round(((Number(product.basePrice) - Number(cp)) / Number(product.basePrice)) * 100);
+                          return (
+                            <p className={cn("text-[10px] font-medium mt-0.5", margin >= 30 ? "text-green-600" : margin >= 10 ? "text-amber-600" : "text-red-500")}>
+                              {margin}% margin
+                            </p>
+                          );
+                        }
+                        return (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {formatCurrency(stock * Number(product.basePrice))} value
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </CardContent>

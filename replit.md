@@ -26,6 +26,34 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## Shipped Features (Batch 22)
+
+- **Product cost price + margin tracking**: New optional `cost_price` column on `products` table (DB migrated). Add/Edit Product dialogs include a "Cost Price (KES)" field; a live margin preview line ("Margin: X% · Profit: KES Y per unit") appears as you type. Each product card shows a colour-coded margin badge once costPrice is set (green ≥30%, amber ≥10%, red <10%) in place of the stock-value line.
+- **WhatsApp restock alert button**: `POST /api/products/restock-alert` endpoint aggregates all low-stock products, formats a WhatsApp message (item · current/threshold · restock qty · cost), and sends to the owner's WhatsApp number (logged if not configured). A green "Send alert" button with WhatsApp icon appears in the amber low-stock banner on InventoryPage. Toast confirms send or shows a "configure owner phone" prompt.
+
+## Shipped Features (Batch 21)
+
+- **Order detail: manual discount**: Items card total row now has an "Add discount" button (hidden for delivered/cancelled/paid). Clicking opens an inline KES number input. On Apply: calls `PATCH /api/orders/:id/discount`, which recomputes `totalAmount = itemsTotal − discount + deliveryFee`, persists `discountAmount` on the order (new `discount_amount` numeric column in `ordersTable`), and logs a `discount_applied` event. If a discount already exists an "Edit discount" label is shown instead. The discount row appears in the receipt breakdown in green (− KES X) when active.
+- **Inventory: restock cost estimate**: Low-stock product cards now show a second line under the amber "Low stock" badge: "Restock N unit · KES Y" where N = threshold − currentStock and Y = N × basePrice. Gives the owner an instant cost-to-restock figure while reviewing inventory.
+- **Inbox unread badge**: Conversation list items where `lastMessageDirection === "inbound"` now show a small pulsing orange dot next to the timestamp and render the last-message preview in full-weight text. Indicates the customer messaged last and is awaiting a reply, making it immediately obvious which threads need attention.
+
+## Shipped Features (Batch 20)
+
+- **Order items inline editor**: Items card on OrderDetailPage now has an "Edit" button (shown for orders not in delivered/cancelled/paid state). Clicking enters edit mode: each item gets `[−] qty [+]` steppers; setting qty to 0 strikes through (removes on save). "Save changes" calls new `PATCH /api/orders/:id/items` backend endpoint which updates quantities/totals per item and recalculates `totalAmount`. An `items_edited` event is logged to `orderEventsTable`. Edit is blocked for delivered and cancelled orders.
+- **Dashboard: Ready for Pickup panel**: New `ReadyOrdersPanel` component (green card, refetches every 30s) shows orders with status `ready` waiting for customer pickup. Appears between Stale Orders and Needs Attention panels. Each row links to the order detail. Hidden when no ready orders exist. Completes the kitchen display workflow: Stale (red) → Ready (green) → Needs Attention (orange).
+
+## Shipped Features (Batch 19)
+
+- **Broadcast segment preview count**: New `GET /api/broadcasts/segment-preview` endpoint returns customer count for each of the 6 segments using the same filter logic as the POST handler. In `NewBroadcastDialog`, the query fires when the dialog opens (lazy, stale 60s) and the counts appear as small pill badges beside each segment chip label (hidden until loaded).
+- **Analytics: real Repeat Buyers metric**: The `GET /api/analytics/summary` handler now includes a 5th query: customers who placed ≥2 orders in the selected period (grouped by `customerId`, HAVING count ≥ 2). The result replaces the hardcoded `repeatCustomers: 0`. The Analytics page adds a 5th stat card "REPEAT BUYERS" in a 5-column grid.
+- **At-risk customers alert**: New `GET /api/customers/at-risk` endpoint returns customers with `totalOrders ≥ 3` AND `lastOrderAt < 30 days ago` (ordered by lastOrderAt desc, limit 20). The Customers page shows an orange alert card above the main list when at-risk customers exist, with clickable pill buttons for each customer (opens their sheet) and a count for overflow. Card is hidden when no at-risk customers.
+
+## Shipped Features (Batch 18)
+
+- **Orders list: delivery + notes badges**: The orders list SELECT now includes `deliveryAddress` and `internalNotes`. Each order row shows a blue 🚚 Truck icon (with delivery address in tooltip) when a delivery address is set, and an amber 💬 MessageSquare icon when the order has staff or customer notes (excluding the embedded WA ref code). Icons appear inline between the WA ref and the status badge.
+- **Inventory: inline quick stock ±1**: Each product card now shows `[−] {stock} [+]` inline buttons around the stock count. Clicking `[−]`/`[+]` calls the new `PATCH /api/products/:id/stock` endpoint (which finds the default/first variant and applies `stockAdjustment ±1`, min 0). Cache is invalidated immediately. The `[−]` button is disabled at 0 stock. No dialog required for single-unit adjustments.
+- **Inventory: stock value per card**: The price section of each product card now shows `KES X value` (totalStock × basePrice) below the unit price, giving the owner an at-a-glance view of inventory value tied up in each product.
+
 ## Shipped Features (Batch 17)
 
 - **Category filter chips in NewOrderDialog**: When on the items step, pill/chip buttons appear above the product grid for each product category (only shown when 2+ categories exist). Clicking a chip filters the product list to that category; clicking again or pressing "All" resets it. Works alongside the existing text search. State resets when the dialog closes.

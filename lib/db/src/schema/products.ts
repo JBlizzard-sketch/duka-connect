@@ -13,6 +13,7 @@ export const productsTable = pgTable("products", {
   unit: varchar("unit", { length: 30 }).notNull().default("piece"),
   imageUrl: text("image_url"),
   isActive: boolean("is_active").notNull().default(true),
+  costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
   lowStockThreshold: numeric("low_stock_threshold", { precision: 10, scale: 3 }).notNull().default("5"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

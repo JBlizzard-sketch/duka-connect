@@ -7,7 +7,7 @@ import {
   getGetCustomerQueryKey,
   getListCustomersQueryKey,
 } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
 
 function getLoyaltyTier(points: number): { label: string; className: string } | null {
@@ -545,6 +545,16 @@ export default function CustomersPage() {
   const [addOpen, setAddOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  interface AtRiskCustomer { id: number; name: string | null; whatsappPhone: string; totalOrders: number; totalSpend: string | number; lastOrderAt: string | Date | null; loyaltyPoints: number; }
+  const { data: atRiskData } = useQuery({
+    queryKey: ["customers", "at-risk"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/customers/at-risk`);
+      return r.json() as Promise<{ customers: AtRiskCustomer[]; total: number }>;
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const initId = useMemo(() => {
     const p = new URLSearchParams(
       typeof window !== "undefined" ? window.location.search : ""
@@ -666,6 +676,38 @@ export default function CustomersPage() {
           ))}
         </div>
       </div>
+
+      {/* At-risk customers alert */}
+      {atRiskData && atRiskData.total > 0 && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-orange-600 text-base">⚠️</span>
+              <p className="text-sm font-semibold text-orange-800">
+                {atRiskData.total} at-risk customer{atRiskData.total !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <p className="text-xs text-orange-600">≥3 orders · inactive 30+ days</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {atRiskData.customers.slice(0, 6).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 hover:bg-orange-200 border border-orange-200 transition-colors text-xs text-orange-800 font-medium"
+              >
+                {c.name || formatPhone(c.whatsappPhone)}
+                <span className="opacity-60">{c.totalOrders} orders</span>
+              </button>
+            ))}
+            {atRiskData.total > 6 && (
+              <span className="text-xs text-orange-600 self-center">
+                +{atRiskData.total - 6} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">

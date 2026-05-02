@@ -162,6 +162,62 @@ function DailyReportButton() {
   );
 }
 
+function ReadyOrdersPanel() {
+  const { data } = useListOrders(
+    { status: "ready", limit: 10, page: 1 } as Parameters<typeof useListOrders>[0],
+    { query: { refetchInterval: 30_000 } }
+  );
+  const readyOrders = data?.orders ?? [];
+  if (readyOrders.length === 0) return null;
+
+  return (
+    <Card className="border-green-200 bg-green-50/60">
+      <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold text-green-900 flex items-center gap-2">
+          <Package className="h-4 w-4 text-green-600" />
+          Ready for Pickup
+          <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+            {readyOrders.length}
+          </span>
+        </CardTitle>
+        <Link href="/orders?status=ready">
+          <span className="text-xs text-green-700 hover:underline cursor-pointer flex items-center gap-0.5">
+            View all <ChevronRight className="h-3 w-3" />
+          </span>
+        </Link>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <div className="divide-y divide-green-100">
+          {readyOrders.map((order) => {
+            const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+            return (
+              <Link key={o.id} href={`/orders/${o.id}`}>
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-green-100/60 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-mono text-muted-foreground shrink-0">#{o.id}</span>
+                      <span className="text-xs font-medium truncate text-foreground">
+                        {o.customerName || formatPhone(o.customerPhone ?? "")}
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {formatTimeAgo(o.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatCurrency(Number(o.totalAmount))} · waiting for pickup
+                    </p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-green-700 shrink-0" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 function StaleOrdersPanel() {
@@ -439,6 +495,9 @@ export default function DashboardPage() {
 
       {/* Stale orders (confirmed/preparing > 2h) */}
       <StaleOrdersPanel />
+
+      {/* Ready orders waiting for pickup */}
+      <ReadyOrdersPanel />
 
       {/* Pending orders action panel */}
       <PendingOrdersPanel />

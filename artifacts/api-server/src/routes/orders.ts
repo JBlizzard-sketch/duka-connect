@@ -50,6 +50,8 @@ router.get("/orders", async (req, res) => {
         totalAmount: ordersTable.totalAmount,
         currency: ordersTable.currency,
         notes: ordersTable.notes,
+        internalNotes: ordersTable.internalNotes,
+        deliveryAddress: ordersTable.deliveryAddress,
         rawMessage: ordersTable.rawMessage,
         assignedToId: ordersTable.assignedToId,
         whatsappMessageId: ordersTable.whatsappMessageId,
@@ -468,6 +470,91 @@ router.patch("/orders/:id", async (req, res) => {
   }
 
   res.json(updated);
+});
+
+router.patch("/orders/:id/items", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  const { items } = req.body as { items?: { id: number; quantity: number }[] };
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "items array required" });
+    return;
+  }
+
+  const [order] = await db.select({ status: ordersTable.status, customerId: ordersTable.customerId })
+    .from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (["delivered", "cancelled"].includes(order.status)) {
+    res.status(400).json({ error: "Cannot edit items on a delivered or cancelled order" });
+    return;
+  }
+
+  for (const { id: itemId, quantity } of items) {
+    if (quantity <= 0) {
+      await db.delete(orderItemsTable).where(
+        and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, id))
+      );
+    } else {
+      const [existing] = await db.select().from(orderItemsTable)
+        .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, id))).limit(1);
+      if (existing) {
+        const newTotal = Number(existing.unitPrice) * quantity;
+        await db.update(orderItemsTable)
+          .set({ quantity: String(quantity), totalPrice: String(newTotal) })
+          .where(eq(orderItemsTable.id, itemId));
+      }
+    }
+  }
+
+  const remaining = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+  const newTotal = remaining.reduce((s, it) => s + Number(it.totalPrice), 0);
+
+  const [updated] = await db.update(ordersTable)
+    .set({ totalAmount: String(newTotal), updatedAt: new Date() })
+    .where(eq(ordersTable.id, id))
+    .returning();
+
+  await db.insert(orderEventsTable).values({
+    orderId: id, event: "items_edited",
+    description: `Items updated. New total: KES ${Math.round(newTotal).toLocaleString()}`,
+  }).catch(() => {});
+
+  res.json({ ok: true, totalAmount: newTotal, items: remaining, order: updated });
+});
+
+router.patch("/orders/:id/discount", async (req, res) => {
+  const parsed = GetOrderParams.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues }); return; }
+  const { id } = parsed.data;
+
+  const rawDiscount = (req.body as Record<string, unknown>).discountAmount;
+  const discountNum = typeof rawDiscount === "number" ? rawDiscount : Number(rawDiscount);
+  if (isNaN(discountNum) || discountNum < 0) { res.status(400).json({ error: "discountAmount must be a non-negative number" }); return; }
+  const body = { data: { discountAmount: discountNum } };
+
+  const [order] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.businessId, 1))).limit(1);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (["delivered", "cancelled"].includes(order.status)) {
+    res.status(409).json({ error: "Cannot discount a delivered or cancelled order" }); return;
+  }
+
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+  const itemsTotal = items.reduce((s, i) => s + Number(i.totalPrice), 0);
+  const discount = Math.min(body.data.discountAmount, itemsTotal);
+  const newTotal = Math.max(0, itemsTotal - discount + Number(order.deliveryFee ?? 0));
+
+  await db.update(ordersTable)
+    .set({ discountAmount: String(discount), totalAmount: String(newTotal), updatedAt: new Date() })
+    .where(eq(ordersTable.id, id));
+
+  await db.insert(orderEventsTable).values({
+    orderId: id,
+    event: "discount_applied",
+    description: discount === 0 ? "Discount removed" : `Discount applied: KES ${Math.round(discount).toLocaleString()}`,
+  }).catch(() => {});
+
+  res.json({ ok: true, discountAmount: discount, totalAmount: newTotal });
 });
 
 router.get("/orders/:id/events", async (req, res) => {

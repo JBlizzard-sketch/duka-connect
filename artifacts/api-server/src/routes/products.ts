@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { productsTable, productVariantsTable } from "@workspace/db";
+import { productsTable, productVariantsTable, businessesTable } from "@workspace/db";
 import { eq, ilike, and, lte, sql, count, desc } from "drizzle-orm";
+import { sendTextMessage } from "../lib/whatsapp";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -108,6 +109,8 @@ router.post("/products", async (req, res) => {
   }
   const { name, description, category, basePrice, unit, lowStockThreshold, initialStock, imageUrl } =
     parsed.data;
+  const costPriceRaw = (parsed.data as Record<string, unknown>).costPrice;
+  const costPriceVal = typeof costPriceRaw === "number" ? costPriceRaw : (costPriceRaw != null ? Number(costPriceRaw) : undefined);
 
   const [product] = await db
     .insert(productsTable)
@@ -120,6 +123,7 @@ router.post("/products", async (req, res) => {
       unit: unit ?? "piece",
       lowStockThreshold: String(lowStockThreshold ?? 5),
       imageUrl,
+      ...(costPriceVal != null && !isNaN(costPriceVal) ? { costPrice: String(costPriceVal) } : {}),
     })
     .returning();
 
@@ -184,6 +188,7 @@ router.patch("/products/:id", async (req, res) => {
   const updates: Partial<typeof productsTable.$inferInsert> = {};
   const { name, description, category, basePrice, unit, lowStockThreshold, isActive, imageUrl } =
     bodyParsed.data;
+  const costPriceRaw2 = (bodyParsed.data as Record<string, unknown>).costPrice;
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
   if (category !== undefined) updates.category = category;
@@ -192,6 +197,10 @@ router.patch("/products/:id", async (req, res) => {
   if (lowStockThreshold !== undefined) updates.lowStockThreshold = String(lowStockThreshold);
   if (isActive !== undefined) updates.isActive = isActive;
   if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+  if (costPriceRaw2 !== undefined) {
+    const cp = costPriceRaw2 === null ? null : Number(costPriceRaw2);
+    updates.costPrice = (cp === null || isNaN(cp as number)) ? null : String(cp);
+  }
   updates.updatedAt = new Date();
 
   const [updated] = await db
@@ -361,6 +370,67 @@ router.post("/products/import", async (req, res) => {
   }
 
   res.json({ created, skipped, errors });
+});
+
+router.patch("/products/:id/stock", async (req, res) => {
+  const productId = parseInt(req.params.id, 10);
+  if (isNaN(productId)) { res.status(400).json({ error: "Invalid product id" }); return; }
+  const { adjustment } = req.body as { adjustment?: number };
+  if (typeof adjustment !== "number" || !Number.isInteger(adjustment) || adjustment === 0) {
+    res.status(400).json({ error: "adjustment must be a non-zero integer" });
+    return;
+  }
+  const [variant] = await db
+    .select()
+    .from(productVariantsTable)
+    .where(eq(productVariantsTable.productId, productId))
+    .limit(1);
+  if (!variant) { res.status(404).json({ error: "No variant found for product" }); return; }
+  const newStock = Math.max(0, Number(variant.stockQuantity) + adjustment);
+  await db
+    .update(productVariantsTable)
+    .set({ stockQuantity: String(newStock) })
+    .where(eq(productVariantsTable.id, variant.id));
+  res.json({ ok: true, productId, variantId: variant.id, newStock });
+});
+
+router.post("/products/restock-alert", async (req, res) => {
+  const [baseProducts, stockByProduct] = await Promise.all([
+    db.select().from(productsTable).where(eq(productsTable.isActive, true)),
+    getStockByProduct(),
+  ]);
+
+  const lowStockProducts = baseProducts
+    .map((p) => ({ ...p, totalStock: stockByProduct[p.id] ?? 0 }))
+    .filter((p) => p.totalStock <= Number(p.lowStockThreshold));
+
+  if (lowStockProducts.length === 0) {
+    res.json({ ok: true, sent: false, message: "No low stock products" });
+    return;
+  }
+
+  const [business] = await db.select().from(businessesTable).where(eq(businessesTable.id, 1)).limit(1);
+  const ownerPhone = business?.ownerPhone;
+
+  const lines = lowStockProducts.map((p) => {
+    const need = Math.max(0, Number(p.lowStockThreshold) - p.totalStock);
+    const cost = need * Number(p.basePrice);
+    return `• ${p.name}: ${p.totalStock}/${Number(p.lowStockThreshold)} ${p.unit} — restock ${need} (KES ${Math.round(cost).toLocaleString()})`;
+  }).join("\n");
+
+  const total = lowStockProducts.reduce((s, p) => {
+    const need = Math.max(0, Number(p.lowStockThreshold) - p.totalStock);
+    return s + need * Number(p.basePrice);
+  }, 0);
+
+  const message = `🔔 *Restock Alert — ${business?.name ?? "Duka"}*\n\n${lowStockProducts.length} item${lowStockProducts.length !== 1 ? "s" : ""} running low:\n\n${lines}\n\n*Total restock cost: KES ${Math.round(total).toLocaleString()}*`;
+
+  if (ownerPhone) {
+    await sendTextMessage(ownerPhone, message);
+    res.json({ ok: true, sent: true, ownerPhone, productCount: lowStockProducts.length });
+  } else {
+    res.json({ ok: true, sent: false, message, productCount: lowStockProducts.length, note: "Set owner WhatsApp in Settings to auto-send" });
+  }
 });
 
 export default router;

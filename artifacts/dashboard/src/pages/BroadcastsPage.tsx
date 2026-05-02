@@ -4,9 +4,10 @@ import {
   useCreateBroadcast,
   getListBroadcastsQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatDateTime } from "@/lib/format";
 import { Radio, Plus, Loader2, Sparkles, ChevronDown, ChevronUp, Smartphone } from "lucide-react";
+
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const TEMPLATES: { category: string; label: string; message: string }[] = [
   {
@@ -136,6 +139,19 @@ function NewBroadcastDialog() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const { data: segmentPreview } = useQuery({
+    queryKey: ["broadcasts", "segment-preview"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/broadcasts/segment-preview`);
+      return r.json() as Promise<{ segments: { segment: string; customerCount: number }[] }>;
+    },
+    staleTime: 60_000,
+    enabled: open,
+  });
+  const segmentCounts = Object.fromEntries(
+    (segmentPreview?.segments ?? []).map((s) => [s.segment, s.customerCount])
+  );
+
   const templateCategories = Array.from(new Set(TEMPLATES.map((t) => t.category)));
 
   const createBroadcast = useCreateBroadcast({
@@ -190,7 +206,14 @@ function NewBroadcastDialog() {
                         : "border-border hover:bg-muted"
                     )}
                   >
-                    <p className="text-xs font-medium">{s.label}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-xs font-medium">{s.label}</p>
+                      {segmentCounts[s.value] !== undefined && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-none">
+                          {segmentCounts[s.value]}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
                   </button>
                 ))}

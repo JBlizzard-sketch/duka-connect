@@ -49,7 +49,7 @@ router.get("/analytics/summary", async (req, res) => {
   const periodStart = getPeriodStart(period);
   const prevPeriodStart = getPrevPeriodStart(period, periodStart);
 
-  const [current, previous, newCusts, prevNewCusts] = await Promise.all([
+  const [current, previous, newCusts, prevNewCusts, repeatCusts] = await Promise.all([
     db
       .select({
         revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
@@ -87,6 +87,17 @@ router.get("/analytics/summary", async (req, res) => {
           sql`${customersTable.createdAt} < ${periodStart}`
         )
       ),
+    db
+      .select({ customerId: ordersTable.customerId })
+      .from(ordersTable)
+      .where(
+        and(
+          gte(ordersTable.createdAt, periodStart),
+          sql`${ordersTable.customerId} is not null`
+        )
+      )
+      .groupBy(ordersTable.customerId)
+      .having(sql`count(*) >= 2`),
   ]);
 
   const revenue = Number(current[0]?.revenue ?? 0);
@@ -95,6 +106,7 @@ router.get("/analytics/summary", async (req, res) => {
   const prevOrders = Number(previous[0]?.orders ?? 0);
   const newCustomers = Number(newCusts[0]?.total ?? 0);
   const prevNewCustomers = Number(prevNewCusts[0]?.total ?? 0);
+  const repeatCustomers = repeatCusts.length;
 
   const revenueChange =
     prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : 0;
@@ -109,7 +121,7 @@ router.get("/analytics/summary", async (req, res) => {
     orders,
     avgOrderValue: orders > 0 ? revenue / orders : 0,
     newCustomers,
-    repeatCustomers: 0,
+    repeatCustomers,
     topCategory: null,
     revenueChange: Math.round(revenueChange * 10) / 10,
     ordersChange: Math.round(ordersChange * 10) / 10,

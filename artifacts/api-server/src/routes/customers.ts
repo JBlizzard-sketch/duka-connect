@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { customersTable, ordersTable } from "@workspace/db";
-import { eq, ilike, or, desc, sql, count } from "drizzle-orm";
+import { eq, ilike, or, desc, sql, count, and } from "drizzle-orm";
 import {
   ListCustomersQueryParams,
   GetCustomerParams,
@@ -11,6 +11,23 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+
+router.get("/customers/at-risk", async (req, res) => {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const atRisk = await db
+    .select()
+    .from(customersTable)
+    .where(
+      and(
+        sql`${customersTable.totalOrders} >= 3`,
+        sql`${customersTable.lastOrderAt} < ${thirtyDaysAgo}`,
+        sql`${customersTable.lastOrderAt} is not null`
+      )
+    )
+    .orderBy(desc(customersTable.lastOrderAt))
+    .limit(20);
+  res.json({ customers: atRisk, total: atRisk.length });
+});
 
 router.post("/customers", async (req, res) => {
   const { name, phone } = req.body as { name?: string; phone?: string };

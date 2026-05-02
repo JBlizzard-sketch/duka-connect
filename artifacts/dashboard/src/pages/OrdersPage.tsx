@@ -3,7 +3,7 @@ import { useListOrders, useUpdateOrderStatus, getListOrdersQueryKey, getGetOrder
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
-import { ChevronRight, Search, Download, Calendar, Loader2, ShoppingCart, X } from "lucide-react";
+import { ChevronRight, Search, Download, Calendar, Loader2, ShoppingCart, X, Truck, FileText, MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/StatusBadge";
@@ -307,8 +307,10 @@ export default function OrdersPage() {
               </div>
 
               {orders.map((order) => {
-                const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+                const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null; internalNotes?: string | null; deliveryAddress?: string | null };
                 const waRef = o.notes?.match(/WA-[A-Z0-9]+/)?.[0];
+                const hasNotes = !!(o.internalNotes || (o.notes && o.notes.replace(/WA-[A-Z0-9]+/g, "").trim()));
+                const hasDelivery = !!o.deliveryAddress;
                 const isSelected = selectedIds.has(o.id);
                 return (
                   <div
@@ -349,6 +351,16 @@ export default function OrdersPage() {
                             {waRef && (
                               <span className="text-xs text-muted-foreground font-mono">
                                 {waRef}
+                              </span>
+                            )}
+                            {hasDelivery && (
+                              <span title={o.deliveryAddress ?? ""} className="inline-flex items-center text-blue-600">
+                                <Truck className="h-3 w-3" />
+                              </span>
+                            )}
+                            {hasNotes && (
+                              <span title="Has notes" className="inline-flex items-center text-amber-500">
+                                <MessageSquare className="h-3 w-3" />
                               </span>
                             )}
                           </div>

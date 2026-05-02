@@ -88,18 +88,23 @@ function ConversationItem({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-0.5">
-            <span className="font-semibold text-sm text-foreground truncate">
+            <span className={cn("font-semibold text-sm truncate", conv.lastMessageDirection === "inbound" && !isSelected ? "text-foreground" : "text-foreground")}>
               {conv.customerName}
             </span>
-            <span className="text-xs text-muted-foreground ml-2 shrink-0">
-              {formatTimeAgo(conv.lastMessageAt)}
-            </span>
+            <div className="flex items-center gap-1.5 ml-2 shrink-0">
+              {conv.lastMessageDirection === "inbound" && (
+                <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" title="Awaiting reply" />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {formatTimeAgo(conv.lastMessageAt)}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5">
             {conv.lastMessageDirection === "outbound" && (
               <Store className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
-            <p className="text-xs text-muted-foreground truncate">
+            <p className={cn("text-xs truncate", conv.lastMessageDirection === "inbound" ? "text-foreground font-medium" : "text-muted-foreground")}>
               {conv.lastMessage ?? "No messages yet"}
             </p>
           </div>
