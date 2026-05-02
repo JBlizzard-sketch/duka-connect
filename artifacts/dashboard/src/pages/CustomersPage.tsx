@@ -291,7 +291,7 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
           </div>
           <NewOrderDialog
             open={newOrderOpen}
-            onOpenChange={setNewOrderOpen}
+            onClose={() => setNewOrderOpen(false)}
             initialCustomerId={customer.id}
           />
 
@@ -522,6 +522,11 @@ export default function CustomersPage() {
                       {formatCurrency(Number(c.totalSpend))}
                     </p>
                     <p className="text-xs text-muted-foreground">{c.totalOrders} orders · {c.loyaltyPoints} pts</p>
+                    {c.lastOrderAt ? (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{formatTimeAgo(c.lastOrderAt)}</p>
+                    ) : c.totalOrders === 0 ? (
+                      <p className="text-[10px] text-amber-500 mt-0.5">No orders yet</p>
+                    ) : null}
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </div>

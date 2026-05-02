@@ -228,7 +228,8 @@ function StockAdjustDialog({
   onUpdated: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [adjustments, setAdjustments] = useState<Record<number, string>>({});
+  const [mode, setMode] = useState<"adjust" | "set">("adjust");
+  const [values, setValues] = useState<Record<number, string>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -248,26 +249,37 @@ function StockAdjustDialog({
 
   const variants = product?.variants ?? [];
 
-  function handleApply(variantId: number) {
-    const raw = adjustments[variantId];
-    const delta = parseInt(raw ?? "0", 10);
-    if (isNaN(delta) || delta === 0) return;
-    updateVariant.mutate(
-      { id: productId, variantId, data: { stockAdjustment: delta } },
-      {
-        onSuccess: () => {
-          setAdjustments((prev) => ({ ...prev, [variantId]: "" }));
-          toast({
-            title: delta > 0 ? `+${delta} units added` : `${delta} units removed`,
-            description: `${productName} stock updated`,
-          });
-        },
-      }
-    );
+  function handleApply(variantId: number, current: number) {
+    const raw = values[variantId];
+    const num = parseInt(raw ?? "", 10);
+    if (isNaN(num)) return;
+    if (mode === "adjust") {
+      if (num === 0) return;
+      updateVariant.mutate(
+        { id: productId, variantId, data: { stockAdjustment: num } },
+        {
+          onSuccess: () => {
+            setValues((prev) => ({ ...prev, [variantId]: "" }));
+            toast({ title: num > 0 ? `+${num} units added` : `${num} units removed`, description: productName });
+          },
+        }
+      );
+    } else {
+      if (num < 0) return;
+      updateVariant.mutate(
+        { id: productId, variantId, data: { stockQuantity: num } },
+        {
+          onSuccess: () => {
+            setValues((prev) => ({ ...prev, [variantId]: "" }));
+            toast({ title: `Stock set to ${num} units`, description: productName });
+          },
+        }
+      );
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setValues({}); setMode("adjust"); } }}>
       <DialogTrigger asChild>
         <button
           data-testid={`button-adjust-stock-${productId}`}
@@ -280,8 +292,24 @@ function StockAdjustDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Adjust Stock — {productName}</DialogTitle>
+          <DialogTitle>Stock — {productName}</DialogTitle>
         </DialogHeader>
+
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+          <button
+            onClick={() => { setMode("adjust"); setValues({}); }}
+            className={cn("px-3 py-1 text-xs font-medium rounded-md transition-colors", mode === "adjust" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            Adjust (+/−)
+          </button>
+          <button
+            onClick={() => { setMode("set"); setValues({}); }}
+            className={cn("px-3 py-1 text-xs font-medium rounded-md transition-colors", mode === "set" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            Set to exact
+          </button>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -289,12 +317,14 @@ function StockAdjustDialog({
         ) : variants.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">No variants found.</p>
         ) : (
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-1">
             {variants.map((v) => {
               const current = Number(v.stockQuantity);
-              const rawAdj = adjustments[v.id] ?? "";
-              const delta = parseInt(rawAdj, 10);
-              const preview = !isNaN(delta) && rawAdj !== "" ? current + delta : null;
+              const raw = values[v.id] ?? "";
+              const num = parseInt(raw, 10);
+              const preview = !isNaN(num) && raw !== ""
+                ? mode === "adjust" ? Math.max(0, current + num) : Math.max(0, num)
+                : null;
 
               return (
                 <div
@@ -311,8 +341,8 @@ function StockAdjustDialog({
                           {current}
                         </span>
                         {preview !== null && (
-                          <span className={cn("ml-1 font-semibold", delta > 0 ? "text-green-600" : "text-red-600")}>
-                            → {Math.max(0, preview)}
+                          <span className={cn("ml-1 font-semibold", mode === "set" ? "text-blue-600" : num > 0 ? "text-green-600" : "text-red-600")}>
+                            → {preview}
                           </span>
                         )}
                       </p>
@@ -326,45 +356,37 @@ function StockAdjustDialog({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        setAdjustments((a) => ({
-                          ...a,
-                          [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) - 1),
-                        }))
-                      }
-                      className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors text-sm"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
+                    {mode === "adjust" && (
+                      <button
+                        onClick={() => setValues((a) => ({ ...a, [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) - 1) }))}
+                        className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                    )}
                     <input
                       data-testid={`input-adjustment-${v.id}`}
                       type="number"
-                      value={rawAdj}
-                      onChange={(e) =>
-                        setAdjustments((a) => ({ ...a, [v.id]: e.target.value }))
-                      }
-                      placeholder="0"
+                      value={raw}
+                      onChange={(e) => setValues((a) => ({ ...a, [v.id]: e.target.value }))}
+                      placeholder={mode === "adjust" ? "0" : `Current: ${current}`}
                       className="flex-1 border border-input rounded-md px-3 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
-                    <button
-                      onClick={() =>
-                        setAdjustments((a) => ({
-                          ...a,
-                          [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) + 1),
-                        }))
-                      }
-                      className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors text-sm font-bold"
-                    >
-                      +
-                    </button>
+                    {mode === "adjust" && (
+                      <button
+                        onClick={() => setValues((a) => ({ ...a, [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) + 1) }))}
+                        className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors font-bold"
+                      >
+                        +
+                      </button>
+                    )}
                     <button
                       data-testid={`button-apply-${v.id}`}
-                      disabled={!rawAdj || isNaN(delta) || delta === 0 || updateVariant.isPending}
-                      onClick={() => handleApply(v.id)}
+                      disabled={!raw || isNaN(num) || (mode === "adjust" && num === 0) || updateVariant.isPending}
+                      onClick={() => handleApply(v.id, current)}
                       className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
-                      {updateVariant.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Apply"}
+                      {updateVariant.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : mode === "set" ? "Set" : "Apply"}
                     </button>
                   </div>
                 </div>

@@ -164,7 +164,7 @@ export default function OrdersPage() {
           </button>
         </div>
       </div>
-      <NewOrderDialog open={newOrderOpen} onOpenChange={setNewOrderOpen} />
+      <NewOrderDialog open={newOrderOpen} onClose={() => setNewOrderOpen(false)} />
 
       {/* Search */}
       <div className="relative max-w-sm">

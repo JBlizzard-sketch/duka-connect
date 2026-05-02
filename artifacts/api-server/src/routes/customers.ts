@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { customersTable, ordersTable } from "@workspace/db";
-import { eq, ilike, desc, sql, count } from "drizzle-orm";
+import { eq, ilike, or, desc, sql, count } from "drizzle-orm";
 import {
   ListCustomersQueryParams,
   GetCustomerParams,
@@ -63,7 +63,12 @@ router.get("/customers", async (req, res) => {
   }
   const { search, page = 1, limit = 50 } = parsed.data;
 
-  const where = search ? ilike(customersTable.name, `%${search}%`) : undefined;
+  const where = search
+    ? or(
+        ilike(customersTable.name, `%${search}%`),
+        ilike(customersTable.whatsappPhone, `%${search.replace(/\D/g, "")}%`)
+      )
+    : undefined;
 
   const [customers, [{ total }]] = await Promise.all([
     db
