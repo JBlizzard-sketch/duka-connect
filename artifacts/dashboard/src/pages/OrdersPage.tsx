@@ -359,6 +359,11 @@ export default function OrdersPage() {
                                 {formatPhone(o.customerPhone)}
                               </p>
                             ) : null}
+                            {(o as typeof o & { itemCount?: number | null }).itemCount != null && (
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                · {(o as typeof o & { itemCount?: number | null }).itemCount} item{Number((o as typeof o & { itemCount?: number | null }).itemCount) !== 1 ? "s" : ""}
+                              </span>
+                            )}
                             <span className="text-xs text-muted-foreground">
                               · {formatTimeAgo(o.createdAt)}
                             </span>

@@ -56,6 +56,7 @@ router.get("/orders", async (req, res) => {
         updatedAt: ordersTable.updatedAt,
         customerName: customersTable.name,
         customerPhone: customersTable.whatsappPhone,
+        itemCount: sql<number>`(select count(*) from ${orderItemsTable} where ${orderItemsTable.orderId} = ${ordersTable.id})`,
       })
       .from(ordersTable)
       .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
@@ -297,7 +298,8 @@ router.patch("/orders/:id", async (req, res) => {
     return;
   }
   const { id } = paramsParsed.data;
-  const { status, notes } = bodyParsed.data;
+  const body = bodyParsed.data as typeof bodyParsed.data & { internalNotes?: string | null };
+  const { status, notes, internalNotes } = body;
 
   // Fetch current order so we can detect actual status changes
   const [current] = await db
@@ -316,6 +318,7 @@ router.patch("/orders/:id", async (req, res) => {
   const setClause: Record<string, unknown> = { updatedAt: new Date() };
   if (status !== undefined) setClause.status = status;
   if (notes !== undefined) setClause.notes = notes;
+  if (internalNotes !== undefined) setClause.internalNotes = internalNotes;
   if ("assignedToId" in bodyParsed.data) setClause.assignedToId = bodyParsed.data.assignedToId ?? null;
 
   const [updated] = await db

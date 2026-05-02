@@ -9,6 +9,8 @@ export const broadcastSegmentEnum = pgEnum("broadcast_segment", [
   "recent",
   "top_customers",
   "loyal",
+  "vip",
+  "new_customers",
 ]);
 
 export const broadcastStatusEnum = pgEnum("broadcast_status", [

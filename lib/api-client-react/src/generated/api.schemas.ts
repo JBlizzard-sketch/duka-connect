@@ -59,6 +59,8 @@ export const BroadcastSegment = {
   recent: "recent",
   top_customers: "top_customers",
   loyal: "loyal",
+  vip: "vip",
+  new_customers: "new_customers",
 } as const;
 
 export type WhatsappWebhookPayloadEntryItem = { [key: string]: unknown };
@@ -96,9 +98,11 @@ export interface Order {
   currency: string;
   rawMessage?: string | null;
   notes?: string | null;
+  internalNotes?: string | null;
   deliveryAddress?: string | null;
   deliveryFee?: number | null;
   assignedToId?: number | null;
+  itemCount?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,6 +185,7 @@ export interface CreateOrderRequest {
 export interface UpdateOrderStatusRequest {
   status?: OrderStatus;
   notes?: string | null;
+  internalNotes?: string | null;
   assignedToId?: number | null;
 }
 

@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, useListStaff, ge
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send, Lock } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
@@ -41,6 +41,8 @@ export default function OrderDetailPage() {
   const [cashAmount, setCashAmount] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState("");
+  const [editingInternalNotes, setEditingInternalNotes] = useState(false);
+  const [internalNotesInput, setInternalNotesInput] = useState("");
   const [assignedToId, setAssignedToId] = useState<number | null | undefined>(undefined);
 
   const { data: staffData } = useListStaff();
@@ -177,6 +179,19 @@ export default function OrderDetailPage() {
       id,
       data: { notes: notesInput.trim() || null },
     });
+  }
+
+  function startEditInternalNotes() {
+    setInternalNotesInput((order as typeof order & { internalNotes?: string | null }).internalNotes ?? "");
+    setEditingInternalNotes(true);
+  }
+
+  function saveInternalNotes() {
+    updateNotes.mutate({
+      id,
+      data: { internalNotes: internalNotesInput.trim() || null },
+    });
+    setEditingInternalNotes(false);
   }
 
   return (
@@ -644,6 +659,66 @@ export default function OrderDetailPage() {
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
           ) : (
             <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+          )}
+        </CardContent>
+      </Card>
+      {/* Internal staff notes */}
+      <Card data-print-hide>
+        <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+            Staff Notes
+            <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Internal</span>
+          </CardTitle>
+          {!editingInternalNotes && (
+            <button
+              data-testid="button-edit-internal-notes"
+              onClick={startEditInternalNotes}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              {(order as typeof order & { internalNotes?: string | null }).internalNotes ? "Edit" : "Add note"}
+            </button>
+          )}
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          {editingInternalNotes ? (
+            <div className="space-y-2">
+              <textarea
+                data-testid="textarea-internal-notes"
+                autoFocus
+                value={internalNotesInput}
+                onChange={(e) => setInternalNotesInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setEditingInternalNotes(false); }}
+                placeholder="Private staff notes — not visible to customer…"
+                rows={3}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  data-testid="button-save-internal-notes"
+                  disabled={updateNotes.isPending}
+                  onClick={saveInternalNotes}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {updateNotes.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingInternalNotes(false)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (order as typeof order & { internalNotes?: string | null }).internalNotes ? (
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {(order as typeof order & { internalNotes?: string | null }).internalNotes}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No staff notes yet.</p>
           )}
         </CardContent>
       </Card>

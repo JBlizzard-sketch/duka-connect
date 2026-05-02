@@ -27,6 +27,7 @@ export const ordersTable = pgTable("orders", {
   rawMessage: text("raw_message"),
   parsedData: text("parsed_data"),
   notes: text("notes"),
+  internalNotes: text("internal_notes"),
   deliveryAddress: text("delivery_address"),
   deliveryFee: numeric("delivery_fee", { precision: 10, scale: 2 }).default("0"),
   assignedToId: integer("assigned_to_id").references(() => staffTable.id),

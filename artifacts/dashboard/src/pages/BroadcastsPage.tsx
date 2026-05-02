@@ -56,11 +56,13 @@ const TEMPLATES: { category: string; label: string; message: string }[] = [
   },
 ];
 
-const SEGMENTS: { value: "all" | "recent" | "top_customers" | "loyal"; label: string; desc: string }[] = [
+const SEGMENTS: { value: "all" | "recent" | "top_customers" | "loyal" | "vip" | "new_customers"; label: string; desc: string }[] = [
   { value: "all", label: "All Customers", desc: "Message everyone" },
   { value: "recent", label: "Recent (30 days)", desc: "Ordered in last month" },
   { value: "top_customers", label: "Top Spenders", desc: "Over KES 5,000 spent" },
   { value: "loyal", label: "Loyal (50+ pts)", desc: "High loyalty points" },
+  { value: "vip", label: "VIP Customers", desc: "10+ orders or KES 10K+" },
+  { value: "new_customers", label: "New Customers", desc: "1–2 orders only" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -129,7 +131,7 @@ function WhatsAppPreview({ message }: { message: string }) {
 function NewBroadcastDialog() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [segment, setSegment] = useState<"all" | "recent" | "top_customers" | "loyal">("all");
+  const [segment, setSegment] = useState<"all" | "recent" | "top_customers" | "loyal" | "vip" | "new_customers">("all");
   const [showTemplates, setShowTemplates] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();

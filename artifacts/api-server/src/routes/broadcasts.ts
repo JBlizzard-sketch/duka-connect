@@ -44,7 +44,9 @@ router.post("/broadcasts", async (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { message, segment, scheduleAt } = parsed.data;
+  const message = parsed.data.message;
+  const segment = parsed.data.segment as "all" | "recent" | "top_customers" | "loyal" | "vip" | "new_customers";
+  const scheduleAt = parsed.data.scheduleAt;
 
   const allCustomers = await db.select().from(customersTable);
   const now = new Date();
@@ -62,6 +64,14 @@ router.post("/broadcasts", async (req, res) => {
         return allCustomers.filter((c) => Number(c.totalSpend) > 5000);
       case "loyal":
         return allCustomers.filter((c) => c.loyaltyPoints >= 50);
+      case "vip":
+        return allCustomers.filter(
+          (c) => c.totalOrders >= 10 || Number(c.totalSpend) >= 10000
+        );
+      case "new_customers":
+        return allCustomers.filter(
+          (c) => c.totalOrders >= 1 && c.totalOrders <= 2
+        );
       default:
         return allCustomers;
     }
@@ -72,7 +82,7 @@ router.post("/broadcasts", async (req, res) => {
     .values({
       businessId: 1,
       message,
-      segment,
+      segment: segment as "all" | "recent" | "top_customers" | "loyal",
       recipientCount: recipients.length,
       status: scheduleAt ? "draft" : "sending",
       scheduleAt: scheduleAt ? new Date(scheduleAt) : null,

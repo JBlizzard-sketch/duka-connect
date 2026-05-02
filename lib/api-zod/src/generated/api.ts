@@ -247,6 +247,7 @@ export const UpdateOrderStatusBody = zod.object({
     ])
     .optional(),
   notes: zod.string().nullish(),
+  internalNotes: zod.string().nullish(),
   assignedToId: zod.number().int().nullable().optional(),
 });
 
@@ -761,7 +762,7 @@ export const ListBroadcastsResponse = zod.object({
     zod.object({
       id: zod.number(),
       message: zod.string(),
-      segment: zod.enum(["all", "recent", "top_customers", "loyal"]),
+      segment: zod.enum(["all", "recent", "top_customers", "loyal", "vip", "new_customers"]),
       recipientCount: zod.number(),
       sentCount: zod.number(),
       failedCount: zod.number(),
@@ -783,7 +784,7 @@ export const ListBroadcastsResponse = zod.object({
  */
 export const CreateBroadcastBody = zod.object({
   message: zod.string(),
-  segment: zod.enum(["all", "recent", "top_customers", "loyal"]),
+  segment: zod.enum(["all", "recent", "top_customers", "loyal", "vip", "new_customers"]),
   scheduleAt: zod.coerce.date().nullish(),
 });
 
