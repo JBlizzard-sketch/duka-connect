@@ -53,12 +53,16 @@ function StatCard({
 
 export default function DashboardPage() {
   const [newOrderOpen, setNewOrderOpen] = useState(false);
-  const { data: summary, isLoading: summaryLoading } = useGetOrdersSummary();
-  const { data: lowStock } = useGetLowStockProducts();
-  const { data: recentOrders, isLoading: ordersLoading } = useListOrders({
-    limit: 8,
-    page: 1,
+  const { data: summary, isLoading: summaryLoading } = useGetOrdersSummary({
+    query: { refetchInterval: 30_000 },
   });
+  const { data: lowStock } = useGetLowStockProducts({
+    query: { refetchInterval: 60_000 },
+  });
+  const { data: recentOrders, isLoading: ordersLoading } = useListOrders(
+    { limit: 8, page: 1 },
+    { query: { refetchInterval: 20_000 } }
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">

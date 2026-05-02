@@ -7,9 +7,9 @@ import {
   getGetCustomerQueryKey,
   getListCustomersQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X, FileText, UserPlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,118 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function AddCustomerDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (id: number) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const { toast } = useToast();
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${BASE}/api/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() || undefined, phone: phone.trim() }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to create customer");
+      }
+      return r.json() as Promise<{ id: number }>;
+    },
+    onSuccess: (data) => {
+      toast({ title: "Customer added" });
+      setName("");
+      setPhone("");
+      onCreated(data.id);
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, variant: "destructive" });
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!phone.trim()) return;
+    createMutation.mutate();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-primary" />
+            Add Customer
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Name (optional)</label>
+            <Input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Jane Mwangi"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">WhatsApp Phone *</label>
+            <Input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 0712345678 or 254712345678"
+              required
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Kenyan number — 07XX or 254XX format
+            </p>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={!phone.trim() || createMutation.isPending}
+              className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Add Customer
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: () => void }) {
   const [editingName, setEditingName] = useState(false);
@@ -269,6 +379,8 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useListCustomers({
     search: search || undefined,
@@ -283,9 +395,18 @@ export default function CustomersPage() {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Customers</h1>
-        {meta && (
-          <span className="text-sm text-muted-foreground">{meta.total} total</span>
-        )}
+        <div className="flex items-center gap-3">
+          {meta && (
+            <span className="text-sm text-muted-foreground">{meta.total} total</span>
+          )}
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Customer
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -372,6 +493,16 @@ export default function CustomersPage() {
           </button>
         </div>
       )}
+
+      <AddCustomerDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(id) => {
+          setAddOpen(false);
+          queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+          setSelectedId(id);
+        }}
+      />
 
       <Sheet
         open={selectedId !== null}

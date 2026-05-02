@@ -12,6 +12,49 @@ import {
 
 const router = Router();
 
+router.post("/customers", async (req, res) => {
+  const { name, phone } = req.body as { name?: string; phone?: string };
+
+  if (!phone || typeof phone !== "string" || phone.trim().length === 0) {
+    res.status(400).json({ error: "phone is required" });
+    return;
+  }
+
+  const cleaned = phone.replace(/\D/g, "");
+  const whatsappPhone = cleaned.startsWith("0")
+    ? "254" + cleaned.slice(1)
+    : cleaned.startsWith("254")
+    ? cleaned
+    : "254" + cleaned;
+
+  if (whatsappPhone.length < 12) {
+    res.status(400).json({ error: "Invalid phone number — must be a valid Kenyan number" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.whatsappPhone, whatsappPhone))
+    .limit(1);
+
+  if (existing) {
+    res.status(409).json({ error: "A customer with this phone number already exists", customer: existing });
+    return;
+  }
+
+  const [customer] = await db
+    .insert(customersTable)
+    .values({
+      businessId: 1,
+      whatsappPhone,
+      name: name?.trim() || null,
+    })
+    .returning();
+
+  res.status(201).json(customer);
+});
+
 router.get("/customers", async (req, res) => {
   const parsed = ListCustomersQueryParams.safeParse(req.query);
   if (!parsed.success) {

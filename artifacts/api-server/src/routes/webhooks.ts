@@ -9,7 +9,7 @@ import {
   productsTable,
   productVariantsTable,
 } from "@workspace/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendTextMessage, buildOrderConfirmation } from "../lib/whatsapp";
 import {
@@ -621,6 +621,72 @@ router.post("/webhooks/mpesa", async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Mpesa callback processing error");
   }
+});
+
+// POST /api/webhooks/simulate
+// Simulates an inbound WhatsApp message for testing without real credentials.
+router.post("/webhooks/simulate", async (req, res) => {
+  const { phone, name, message } = req.body as {
+    phone?: string;
+    name?: string;
+    message: string;
+  };
+
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "message is required" });
+    return;
+  }
+
+  const simPhone = (phone?.trim() || "254700000001").replace(/\D/g, "");
+  const normalizedPhone = simPhone.startsWith("0")
+    ? "254" + simPhone.slice(1)
+    : simPhone.startsWith("254")
+    ? simPhone
+    : "254" + simPhone;
+
+  const fakeMessageId = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const fakePayload: Record<string, unknown> = {
+    from: normalizedPhone,
+    id: fakeMessageId,
+    type: "text",
+    text: { body: message.trim() },
+    contacts: [{ profile: { name: name?.trim() || "Test Customer" } }],
+  };
+
+  await processInboundMessage(fakePayload, { phone_number_id: "simulated" });
+
+  // Fetch the generated reply (latest outbound to this phone)
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.whatsappPhone, normalizedPhone))
+    .limit(1);
+
+  const replies = customer
+    ? await db
+        .select()
+        .from(whatsappMessagesTable)
+        .where(
+          and(
+            eq(whatsappMessagesTable.customerId, customer.id),
+            eq(whatsappMessagesTable.direction, "outbound")
+          )
+        )
+        .orderBy(desc(whatsappMessagesTable.createdAt))
+        .limit(1)
+    : [];
+
+  logger.info(
+    { phone: normalizedPhone, message: message.trim().slice(0, 80), gotReply: replies.length > 0 },
+    "WhatsApp message simulated"
+  );
+
+  res.json({
+    ok: true,
+    customerId: customer?.id ?? null,
+    reply: replies[0]?.body ?? null,
+  });
 });
 
 export default router;
