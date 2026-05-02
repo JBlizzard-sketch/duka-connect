@@ -3,6 +3,8 @@ import {
   useListProducts,
   useCreateProduct,
   useDeleteProduct,
+  useGetProduct,
+  useUpdateProductVariant,
   getListProductsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +16,8 @@ import {
   Package,
   Loader2,
   Trash2,
+  Pencil,
+  Minus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -105,6 +109,165 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
             {createProduct.isPending ? "Adding..." : "Add Product"}
           </button>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StockAdjustDialog({
+  productId,
+  productName,
+  onUpdated,
+}: {
+  productId: number;
+  productName: string;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [adjustments, setAdjustments] = useState<Record<number, string>>({});
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: product, isLoading } = useGetProduct(productId, {
+    query: { enabled: open },
+  });
+
+  const updateVariant = useUpdateProductVariant({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        onUpdated();
+      },
+      onError: () => toast({ title: "Stock update failed", variant: "destructive" }),
+    },
+  });
+
+  const variants = product?.variants ?? [];
+
+  function handleApply(variantId: number) {
+    const raw = adjustments[variantId];
+    const delta = parseInt(raw ?? "0", 10);
+    if (isNaN(delta) || delta === 0) return;
+    updateVariant.mutate(
+      { id: productId, variantId, data: { stockAdjustment: delta } },
+      {
+        onSuccess: () => {
+          setAdjustments((prev) => ({ ...prev, [variantId]: "" }));
+          toast({
+            title: delta > 0 ? `+${delta} units added` : `${delta} units removed`,
+            description: `${productName} stock updated`,
+          });
+        },
+      }
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          data-testid={`button-adjust-stock-${productId}`}
+          onClick={(e) => e.stopPropagation()}
+          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors shrink-0"
+          title="Adjust stock"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adjust Stock — {productName}</DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : variants.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No variants found.</p>
+        ) : (
+          <div className="space-y-4 pt-2">
+            {variants.map((v) => {
+              const current = Number(v.stockQuantity);
+              const rawAdj = adjustments[v.id] ?? "";
+              const delta = parseInt(rawAdj, 10);
+              const preview = !isNaN(delta) && rawAdj !== "" ? current + delta : null;
+
+              return (
+                <div
+                  key={v.id}
+                  data-testid={`variant-row-${v.id}`}
+                  className="border border-border rounded-lg p-3 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{v.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(Number(v.price))} · Current:{" "}
+                        <span className={cn("font-semibold", current <= Number(v.lowStockThreshold) && "text-amber-600")}>
+                          {current}
+                        </span>
+                        {preview !== null && (
+                          <span className={cn("ml-1 font-semibold", delta > 0 ? "text-green-600" : "text-red-600")}>
+                            → {Math.max(0, preview)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {current <= Number(v.lowStockThreshold) && (
+                      <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                        <AlertTriangle className="h-3 w-3" />
+                        Low
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setAdjustments((a) => ({
+                          ...a,
+                          [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) - 1),
+                        }))
+                      }
+                      className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors text-sm"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <input
+                      data-testid={`input-adjustment-${v.id}`}
+                      type="number"
+                      value={rawAdj}
+                      onChange={(e) =>
+                        setAdjustments((a) => ({ ...a, [v.id]: e.target.value }))
+                      }
+                      placeholder="0"
+                      className="flex-1 border border-input rounded-md px-3 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button
+                      onClick={() =>
+                        setAdjustments((a) => ({
+                          ...a,
+                          [v.id]: String((parseInt(a[v.id] ?? "0", 10) || 0) + 1),
+                        }))
+                      }
+                      className="h-8 w-8 rounded border border-input flex items-center justify-center hover:bg-muted transition-colors text-sm font-bold"
+                    >
+                      +
+                    </button>
+                    <button
+                      data-testid={`button-apply-${v.id}`}
+                      disabled={!rawAdj || isNaN(delta) || delta === 0 || updateVariant.isPending}
+                      onClick={() => handleApply(v.id)}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {updateVariant.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Apply"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -207,13 +370,22 @@ export default function InventoryPage() {
                         </p>
                       )}
                     </div>
-                    <button
-                      data-testid={`button-delete-product-${product.id}`}
-                      onClick={() => deleteProduct.mutate({ id: product.id })}
-                      className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors shrink-0"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <StockAdjustDialog
+                        productId={product.id}
+                        productName={product.name}
+                        onUpdated={() =>
+                          queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+                        }
+                      />
+                      <button
+                        data-testid={`button-delete-product-${product.id}`}
+                        onClick={() => deleteProduct.mutate({ id: product.id })}
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex items-end justify-between">

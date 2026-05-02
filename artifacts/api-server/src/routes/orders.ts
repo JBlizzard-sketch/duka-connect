@@ -7,6 +7,7 @@ import {
   productsTable,
   productVariantsTable,
   paymentsTable,
+  whatsappMessagesTable,
 } from "@workspace/db";
 import { eq, desc, and, gte, lte, sql, count, sum } from "drizzle-orm";
 import {
@@ -16,6 +17,7 @@ import {
   UpdateOrderStatusParams,
   GetOrderParams,
 } from "@workspace/api-zod";
+import { sendTextMessage, buildOrderStatusUpdate } from "../lib/whatsapp";
 
 const router = Router();
 
@@ -262,6 +264,56 @@ router.patch("/orders/:id", async (req, res) => {
         updatedAt: new Date(),
       })
       .where(eq(customersTable.id, updated.customerId));
+  }
+
+  // Deduct stock when order is confirmed
+  if (status === "confirmed") {
+    const items = await db
+      .select()
+      .from(orderItemsTable)
+      .where(eq(orderItemsTable.orderId, id));
+
+    await Promise.all(
+      items
+        .filter((it) => it.variantId != null)
+        .map((it) =>
+          db
+            .update(productVariantsTable)
+            .set({
+              stockQuantity: sql`greatest(0, cast(${productVariantsTable.stockQuantity} as numeric) - ${Number(it.quantity)})`,
+              updatedAt: new Date(),
+            })
+            .where(eq(productVariantsTable.id, it.variantId!))
+        )
+    );
+  }
+
+  // Send WhatsApp status notification to customer (fire-and-forget)
+  if (status && ["confirmed", "paid", "preparing", "ready", "delivered", "cancelled"].includes(status)) {
+    const [customer] = await db
+      .select({ name: customersTable.name, phone: customersTable.whatsappPhone })
+      .from(customersTable)
+      .where(eq(customersTable.id, updated.customerId));
+
+    if (customer?.phone) {
+      const orderRef = updated.notes?.match(/WA-[A-Z0-9]+/)?.[0] ?? String(id);
+      const msgBody = buildOrderStatusUpdate(customer.name ?? "", orderRef, status);
+
+      sendTextMessage(customer.phone, msgBody)
+        .then(async (result) => {
+          await db.insert(whatsappMessagesTable).values({
+            businessId: 1,
+            customerId: updated.customerId,
+            whatsappMessageId: result.success ? result.messageId : `local-${Date.now()}`,
+            direction: "outbound",
+            messageType: "text",
+            body: msgBody,
+            rawPayload: JSON.stringify({ to: customer.phone, status }),
+            isOrderMessage: true,
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   res.json(updated);
