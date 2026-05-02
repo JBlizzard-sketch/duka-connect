@@ -15,6 +15,7 @@ import {
   Loader2,
   CheckCircle2,
   PlusCircle,
+  Search,
 } from "lucide-react";
 import { formatTimeAgo, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -400,6 +401,7 @@ export default function MessagesPage() {
   const [replyText, setReplyText] = useState("");
   const [showThread, setShowThread] = useState(initCustomerId !== null);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [inboxSearch, setInboxSearch] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -448,8 +450,18 @@ export default function MessagesPage() {
     }
   }, [threadData?.messages]);
 
-  const conversations = convsData?.conversations ?? [];
-  const selectedConv = conversations.find((c) => c.customerId === selectedCustomerId);
+  const allConversations = convsData?.conversations ?? [];
+  const conversations = inboxSearch.trim()
+    ? allConversations.filter((c) => {
+        const q = inboxSearch.toLowerCase();
+        return (
+          (c.customerName ?? "").toLowerCase().includes(q) ||
+          c.customerPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
+          (c.lastMessage ?? "").toLowerCase().includes(q)
+        );
+      })
+    : allConversations;
+  const selectedConv = allConversations.find((c) => c.customerId === selectedCustomerId);
 
   function selectConversation(id: number) {
     setSelectedCustomerId(id);
@@ -479,16 +491,29 @@ export default function MessagesPage() {
         )}
       >
         {/* Header */}
-        <div className="px-4 py-4 border-b border-border">
+        <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-bold text-foreground">Inbox</h1>
-            {conversations.length > 0 && (
+            {allConversations.length > 0 && (
               <span className="ml-auto text-xs text-muted-foreground">
-                {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
+                {conversations.length !== allConversations.length
+                  ? `${conversations.length} of ${allConversations.length}`
+                  : `${allConversations.length} conversation${allConversations.length !== 1 ? "s" : ""}`}
               </span>
             )}
           </div>
+          {allConversations.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                value={inboxSearch}
+                onChange={(e) => setInboxSearch(e.target.value)}
+                placeholder="Search by name or phone…"
+                className="w-full pl-8 pr-3 py-1.5 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
+              />
+            </div>
+          )}
         </div>
 
         {/* Simulator */}

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, orderItemsTable, productsTable, productVariantsTable, businessesTable } from "@workspace/db";
+import { ordersTable, orderItemsTable, productsTable, productVariantsTable, businessesTable, customersTable } from "@workspace/db";
 import { eq, gte, sql, count, sum, desc, and } from "drizzle-orm";
 import {
   GetAnalyticsSummaryQueryParams,
@@ -49,7 +49,7 @@ router.get("/analytics/summary", async (req, res) => {
   const periodStart = getPeriodStart(period);
   const prevPeriodStart = getPrevPeriodStart(period, periodStart);
 
-  const [current, previous] = await Promise.all([
+  const [current, previous, newCusts, prevNewCusts] = await Promise.all([
     db
       .select({
         revenue: sql<number>`coalesce(sum(cast(${ordersTable.totalAmount} as numeric)), 0)`,
@@ -74,28 +74,46 @@ router.get("/analytics/summary", async (req, res) => {
           )
         )
       ),
+    db
+      .select({ total: count() })
+      .from(customersTable)
+      .where(gte(customersTable.createdAt, periodStart)),
+    db
+      .select({ total: count() })
+      .from(customersTable)
+      .where(
+        and(
+          gte(customersTable.createdAt, prevPeriodStart),
+          sql`${customersTable.createdAt} < ${periodStart}`
+        )
+      ),
   ]);
 
   const revenue = Number(current[0]?.revenue ?? 0);
   const orders = Number(current[0]?.orders ?? 0);
   const prevRevenue = Number(previous[0]?.revenue ?? 0);
   const prevOrders = Number(previous[0]?.orders ?? 0);
+  const newCustomers = Number(newCusts[0]?.total ?? 0);
+  const prevNewCustomers = Number(prevNewCusts[0]?.total ?? 0);
 
   const revenueChange =
     prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : 0;
   const ordersChange =
     prevOrders > 0 ? ((orders - prevOrders) / prevOrders) * 100 : 0;
+  const newCustomersChange =
+    prevNewCustomers > 0 ? ((newCustomers - prevNewCustomers) / prevNewCustomers) * 100 : 0;
 
   res.json({
     period,
     revenue,
     orders,
     avgOrderValue: orders > 0 ? revenue / orders : 0,
-    newCustomers: 0,
+    newCustomers,
     repeatCustomers: 0,
     topCategory: null,
     revenueChange: Math.round(revenueChange * 10) / 10,
     ordersChange: Math.round(ordersChange * 10) / 10,
+    newCustomersChange: Math.round(newCustomersChange * 10) / 10,
   });
 });
 

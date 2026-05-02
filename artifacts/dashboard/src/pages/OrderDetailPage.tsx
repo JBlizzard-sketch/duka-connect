@@ -154,10 +154,57 @@ export default function OrderDetailPage() {
         </button>
       </div>
 
-      {/* Print-only receipt header */}
-      <div className="hidden print-only border-b border-gray-300 pb-3 mb-2">
-        <h1 className="text-xl font-bold">Order Receipt — #{order.id}</h1>
-        <p className="text-sm text-gray-500">{formatDateTime(order.createdAt)} · Status: {order.status.toUpperCase()}</p>
+      {/* Print-only receipt */}
+      <div className="hidden print-only" style={{ fontFamily: "sans-serif", color: "#111" }}>
+        <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: "12px", marginBottom: "12px" }}>
+          <p style={{ fontSize: "11px", color: "#666", marginBottom: "2px" }}>OFFICIAL RECEIPT</p>
+          <h1 style={{ fontSize: "22px", fontWeight: "bold", margin: "0 0 2px" }}>Order #{order.id}</h1>
+          <p style={{ fontSize: "11px", color: "#555" }}>{formatDateTime(order.createdAt)}</p>
+        </div>
+
+        {order.customer && (
+          <div style={{ marginBottom: "12px", fontSize: "12px" }}>
+            <p><strong>Customer:</strong> {order.customer.name || formatPhone(order.customer.whatsappPhone)}</p>
+            <p><strong>Phone:</strong> {formatPhone(order.customer.whatsappPhone)}</p>
+          </div>
+        )}
+
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", marginBottom: "12px" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #333" }}>
+              <th style={{ textAlign: "left", paddingBottom: "4px" }}>Item</th>
+              <th style={{ textAlign: "right", paddingBottom: "4px" }}>Qty</th>
+              <th style={{ textAlign: "right", paddingBottom: "4px" }}>Price</th>
+              <th style={{ textAlign: "right", paddingBottom: "4px" }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.items?.map((item, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "4px 0" }}>{item.productName}{item.variantName ? ` (${item.variantName})` : ""}</td>
+                <td style={{ textAlign: "right", padding: "4px 0" }}>{item.quantity}</td>
+                <td style={{ textAlign: "right", padding: "4px 0" }}>{formatCurrency(Number(item.unitPrice))}</td>
+                <td style={{ textAlign: "right", padding: "4px 0" }}>{formatCurrency(Number(item.totalPrice))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid #333" }}>
+              <td colSpan={3} style={{ paddingTop: "6px", fontWeight: "bold" }}>TOTAL</td>
+              <td style={{ textAlign: "right", paddingTop: "6px", fontWeight: "bold", fontSize: "14px" }}>{formatCurrency(Number(order.totalAmount))}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        {order.payment?.mpesaReceiptNumber && (
+          <p style={{ fontSize: "11px", color: "#555" }}>Mpesa receipt: {order.payment.mpesaReceiptNumber}</p>
+        )}
+        {order.notes && (
+          <p style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>Notes: {order.notes}</p>
+        )}
+        <div style={{ borderTop: "1px solid #ccc", marginTop: "16px", paddingTop: "8px", textAlign: "center", fontSize: "11px", color: "#777" }}>
+          <p>Status: {order.status.toUpperCase()} · Thank you for your business!</p>
+        </div>
       </div>
 
       {/* Status actions */}
@@ -189,7 +236,7 @@ export default function OrderDetailPage() {
 
       {/* Customer */}
       {order.customer && (
-        <Card>
+        <Card data-print-hide>
           <CardHeader className="px-4 pt-4 pb-2">
             <CardTitle className="text-sm font-semibold">Customer</CardTitle>
           </CardHeader>
@@ -250,7 +297,7 @@ export default function OrderDetailPage() {
       )}
 
       {/* Items */}
-      <Card>
+      <Card data-print-hide>
         <CardHeader className="px-4 pt-4 pb-2">
           <CardTitle className="text-sm font-semibold">
             Items ({order.items?.length ?? 0})
@@ -292,7 +339,7 @@ export default function OrderDetailPage() {
       </Card>
 
       {/* Payment */}
-      <Card>
+      <Card data-print-hide>
         <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold">Payment</CardTitle>
           {order.payment ? (
@@ -366,7 +413,7 @@ export default function OrderDetailPage() {
       </Card>
 
       {/* Notes — always shown, editable */}
-      <Card>
+      <Card data-print-hide>
         <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <MessageSquare className="h-3.5 w-3.5" />

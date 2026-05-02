@@ -6,7 +6,8 @@
 @media print {
   [data-print-hide],
   aside,
-  header {
+  header,
+  nav {
     display: none !important;
   }
   body {
@@ -14,9 +15,15 @@
   }
   main {
     overflow: visible !important;
+    padding: 0 !important;
+    max-width: 100% !important;
   }
   .print-only {
     display: block !important;
+  }
+  /* Hide all cards and sections that aren't the receipt */
+  [data-print-section] {
+    display: none !important;
   }
 }
 
