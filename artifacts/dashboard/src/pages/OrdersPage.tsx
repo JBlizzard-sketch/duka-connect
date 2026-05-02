@@ -78,37 +78,52 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {orders.map((order) => (
-                <Link key={order.id} href={`/orders/${order.id}`}>
-                  <div
-                    data-testid={`row-order-${order.id}`}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono text-muted-foreground">
-                          #{order.id}
-                        </span>
-                        <StatusBadge status={order.status} />
-                        {order.notes && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                            {order.notes}
+              {orders.map((order) => {
+                const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+                const waRef = o.notes?.match(/WA-[A-Z0-9]+/)?.[0];
+                return (
+                  <Link key={o.id} href={`/orders/${o.id}`}>
+                    <div
+                      data-testid={`row-order-${o.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono text-muted-foreground">
+                            #{o.id}
                           </span>
-                        )}
+                          <StatusBadge status={o.status} />
+                          {waRef && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {waRef}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {o.customerName ? (
+                            <p className="text-xs font-medium text-foreground truncate max-w-[160px]">
+                              {o.customerName}
+                            </p>
+                          ) : o.customerPhone ? (
+                            <p className="text-xs text-muted-foreground">
+                              {formatPhone(o.customerPhone)}
+                            </p>
+                          ) : null}
+                          <span className="text-xs text-muted-foreground">
+                            · {formatTimeAgo(o.createdAt)}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatTimeAgo(order.createdAt)}
-                      </p>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold">
+                          {formatCurrency(Number(o.totalAmount))}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold">
-                        {formatCurrency(Number(order.totalAmount))}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </CardContent>

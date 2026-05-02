@@ -92,7 +92,8 @@ async function processInboundMessage(
     logger.info({ phone, contactName }, "New customer created from WhatsApp");
   }
 
-  const isOrderMsg = body ? isLikelyOrderMessage(body) : false;
+  const isCatalog = body ? isCatalogRequest(body) : false;
+  const isOrderMsg = body && !isCatalog ? isLikelyOrderMessage(body) : false;
 
   await db.insert(whatsappMessagesTable).values({
     businessId: 1,
@@ -106,11 +107,13 @@ async function processInboundMessage(
   });
 
   logger.info(
-    { phone, messageType, body: body?.slice(0, 100), isOrderMsg },
+    { phone, messageType, body: body?.slice(0, 100), isOrderMsg, isCatalog },
     "WhatsApp message received"
   );
 
-  if (body && isOrderMsg) {
+  if (body && isCatalog) {
+    await handleCatalogMessage(customer, phone);
+  } else if (body && isOrderMsg) {
     await handleOrderMessage(customer, phone, body);
   } else if (body) {
     await handleGeneralMessage(customer, phone, body);
@@ -333,6 +336,82 @@ async function sendAndLogMessage(
     rawPayload: JSON.stringify({ to: phone, text }),
     isOrderMessage: false,
   });
+}
+
+function isCatalogRequest(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const catalogKeywords = [
+    "catalog", "catalogue", "orodha", "menu", "products", "bidhaa",
+    "what do you have", "what you have", "what you sell", "mnauza nini",
+    "mna nini", "nini mna", "bei zote", "all prices", "price list",
+    "pricelist", "stock list", "available", "what is available",
+    "show me", "list products", "yote",
+  ];
+  return catalogKeywords.some((kw) => lower.includes(kw));
+}
+
+async function handleCatalogMessage(
+  customer: typeof customersTable.$inferSelect,
+  phone: string
+) {
+  try {
+    const products = await db
+      .select({
+        id: productsTable.id,
+        name: productsTable.name,
+        unit: productsTable.unit,
+        basePrice: productsTable.basePrice,
+        category: productsTable.category,
+      })
+      .from(productsTable)
+      .where(eq(productsTable.isActive, true));
+
+    if (products.length === 0) {
+      await sendAndLogMessage(
+        phone,
+        customer.id,
+        `Samahani, hakuna bidhaa zinazopatikana sasa hivi. 😔\n(Sorry, no products are available right now.)`
+      );
+      return;
+    }
+
+    // Group by category
+    const grouped: Record<string, typeof products> = {};
+    for (const p of products) {
+      const cat = p.category ?? "General";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(p);
+    }
+
+    const CATEGORY_EMOJI: Record<string, string> = {
+      Medicine: "💊", Groceries: "🛒", Butchery: "🥩",
+      Hygiene: "🧴", Beverages: "🥤", General: "📦",
+    };
+
+    const name = customer.name ?? customer.whatsappName ?? "";
+    const greeting = name ? `Habari ${name}! 👋` : "Habari! 👋";
+
+    let msg = `${greeting}\n\n🏪 *Orodha ya Bidhaa / Product Catalog*\n`;
+
+    for (const [category, items] of Object.entries(grouped)) {
+      const emoji = CATEGORY_EMOJI[category] ?? "📦";
+      msg += `\n${emoji} *${category}*\n`;
+      for (const p of items) {
+        const price = Number(p.basePrice);
+        msg += `  • ${p.name} — KES ${price.toLocaleString()}/${p.unit ?? "piece"}\n`;
+      }
+    }
+
+    msg +=
+      `\n_Kuorder, tuma ujumbe kama:_\n` +
+      `_"Nataka [bidhaa] [idadi]"_\n` +
+      `_(Example: "Nataka panadol 2 strips na unga 1 packet")_`;
+
+    await sendAndLogMessage(phone, customer.id, msg);
+    logger.info({ phone, productCount: products.length }, "Catalog sent");
+  } catch (err) {
+    logger.error({ err, phone }, "Error sending catalog");
+  }
 }
 
 function isLikelyOrderMessage(text: string): boolean {

@@ -5,7 +5,7 @@ import {
   customersTable,
   ordersTable,
 } from "@workspace/db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendTextMessage } from "../lib/whatsapp";
 
@@ -211,35 +211,49 @@ router.post("/messages/thread/:customerId/reply", async (req, res) => {
 // GET /api/messages/stats
 // Quick stats for the inbox badge
 router.get("/messages/stats", async (req, res) => {
-  const [totalInbound] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(whatsappMessagesTable)
-    .where(
-      and(
-        eq(whatsappMessagesTable.businessId, 1),
-        eq(whatsappMessagesTable.direction, "inbound")
-      )
-    );
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-  const [orderMessages] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(whatsappMessagesTable)
-    .where(
-      and(
-        eq(whatsappMessagesTable.businessId, 1),
-        eq(whatsappMessagesTable.isOrderMessage, true)
-      )
-    );
-
-  const [distinctCustomers] = await db
-    .select({ count: sql<number>`count(distinct customer_id)::int` })
-    .from(whatsappMessagesTable)
-    .where(eq(whatsappMessagesTable.businessId, 1));
+  const [[totalInbound], [orderMessages], [distinctCustomers], [recentInbound]] =
+    await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(whatsappMessagesTable)
+        .where(
+          and(
+            eq(whatsappMessagesTable.businessId, 1),
+            eq(whatsappMessagesTable.direction, "inbound")
+          )
+        ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(whatsappMessagesTable)
+        .where(
+          and(
+            eq(whatsappMessagesTable.businessId, 1),
+            eq(whatsappMessagesTable.isOrderMessage, true)
+          )
+        ),
+      db
+        .select({ count: sql<number>`count(distinct customer_id)::int` })
+        .from(whatsappMessagesTable)
+        .where(eq(whatsappMessagesTable.businessId, 1)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(whatsappMessagesTable)
+        .where(
+          and(
+            eq(whatsappMessagesTable.businessId, 1),
+            eq(whatsappMessagesTable.direction, "inbound"),
+            gte(whatsappMessagesTable.createdAt, oneHourAgo)
+          )
+        ),
+    ]);
 
   res.json({
     totalInbound: Number(totalInbound?.count ?? 0),
     orderMessages: Number(orderMessages?.count ?? 0),
     activeConversations: Number(distinctCustomers?.count ?? 0),
+    recentInbound: Number(recentInbound?.count ?? 0),
   });
 });
 

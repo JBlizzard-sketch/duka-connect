@@ -39,8 +39,24 @@ router.get("/orders", async (req, res) => {
 
   const [orders, [{ total }]] = await Promise.all([
     db
-      .select()
+      .select({
+        id: ordersTable.id,
+        businessId: ordersTable.businessId,
+        customerId: ordersTable.customerId,
+        status: ordersTable.status,
+        totalAmount: ordersTable.totalAmount,
+        currency: ordersTable.currency,
+        notes: ordersTable.notes,
+        rawMessage: ordersTable.rawMessage,
+        assignedToId: ordersTable.assignedToId,
+        whatsappMessageId: ordersTable.whatsappMessageId,
+        createdAt: ordersTable.createdAt,
+        updatedAt: ordersTable.updatedAt,
+        customerName: customersTable.name,
+        customerPhone: customersTable.whatsappPhone,
+      })
       .from(ordersTable)
+      .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(where)
       .orderBy(desc(ordersTable.createdAt))
       .limit(limit)

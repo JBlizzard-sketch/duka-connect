@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -26,15 +26,36 @@ const navItems = [
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
+function useInboxBadge() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/messages/stats");
+        if (!res.ok) return;
+        const data = (await res.json()) as { recentInbound?: number };
+        if (active) setCount(data.recentInbound ?? 0);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 30_000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+  return count;
+}
+
 function NavItem({
   href,
   icon: Icon,
   label,
+  badge,
   onClick,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
+  badge?: number;
   onClick?: () => void;
 }) {
   const [location] = useLocation();
@@ -52,13 +73,25 @@ function NavItem({
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        {label}
+        <span className="flex-1">{label}</span>
+        {badge != null && badge > 0 && (
+          <span
+            className={cn(
+              "min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none",
+              isActive
+                ? "bg-primary-foreground/20 text-primary-foreground"
+                : "bg-amber-500 text-white"
+            )}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
       </span>
     </Link>
   );
 }
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+function Sidebar({ inboxBadge, onClose }: { inboxBadge: number; onClose?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-5 border-b border-sidebar-border">
@@ -79,7 +112,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
-          <NavItem key={item.href} {...item} onClick={onClose} />
+          <NavItem
+            key={item.href}
+            {...item}
+            badge={item.href === "/messages" ? inboxBadge : undefined}
+            onClick={onClose}
+          />
         ))}
       </nav>
       <div className="px-4 py-3 border-t border-sidebar-border">
@@ -92,12 +130,13 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const inboxBadge = useInboxBadge();
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-sidebar border-r border-sidebar-border shrink-0">
-        <Sidebar />
+        <Sidebar inboxBadge={inboxBadge} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -108,7 +147,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-56 bg-sidebar flex flex-col z-50">
-            <Sidebar onClose={() => setMobileOpen(false)} />
+            <Sidebar inboxBadge={inboxBadge} onClose={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}
