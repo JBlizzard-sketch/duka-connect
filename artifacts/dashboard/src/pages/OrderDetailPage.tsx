@@ -3,7 +3,7 @@ import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, getGetOrderQuery
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -185,12 +185,24 @@ export default function OrderDetailPage() {
                   <span>{order.customer.loyaltyPoints} pts</span>
                 </div>
               </div>
-              <Link href={`/messages?customerId=${order.customer.id}`}>
-                <button className="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-lg transition-colors shrink-0 mt-0.5">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Message
-                </button>
-              </Link>
+              <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                <a
+                  href={`https://wa.me/${order.customer.whatsappPhone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-medium border border-border px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                  title="Open in WhatsApp"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  WhatsApp
+                </a>
+                <Link href={`/messages?customerId=${order.customer.id}`}>
+                  <button className="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-lg transition-colors">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Message
+                  </button>
+                </Link>
+              </div>
             </div>
           </CardContent>
         </Card>

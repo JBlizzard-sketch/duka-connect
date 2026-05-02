@@ -253,12 +253,24 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
                 {formatPhone(customer.whatsappPhone)}
               </p>
             </div>
-            <Button asChild size="sm" variant="outline" className="shrink-0 gap-1.5">
-              <Link href={`/messages?customerId=${customer.id}`} onClick={onClose}>
-                <MessageCircle className="h-3.5 w-3.5" />
-                Message
-              </Link>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href={`https://wa.me/${customer.whatsappPhone}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs font-medium border border-border px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                title="Open in WhatsApp"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                WhatsApp
+              </a>
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <Link href={`/messages?customerId=${customer.id}`} onClick={onClose}>
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Message
+                </Link>
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">

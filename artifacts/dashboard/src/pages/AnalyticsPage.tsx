@@ -9,6 +9,7 @@ import {
   getGetTopCustomersQueryKey,
 } from "@workspace/api-client-react";
 import { formatCurrency, formatPhone } from "@/lib/format";
+import { Link } from "wouter";
 import {
   AreaChart,
   Area,
@@ -19,7 +20,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -37,6 +38,19 @@ interface DayPoint {
   label: string;
   orders: number;
   revenue: number;
+}
+
+interface HourPoint {
+  hour: number;
+  orders: number;
+  revenue: number;
+}
+
+function formatHour(h: number) {
+  if (h === 0) return "12am";
+  if (h < 12) return `${h}am`;
+  if (h === 12) return "12pm";
+  return `${h - 12}pm`;
 }
 
 function ChangeIndicator({ change }: { change: number }) {
@@ -79,6 +93,25 @@ export default function AnalyticsPage() {
     },
     staleTime: 60_000,
   });
+
+  const { data: hourlyData } = useQuery({
+    queryKey: ["analytics", "revenue-by-hour", period],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/revenue-by-hour?period=${period}`);
+      return r.json() as Promise<{ data: HourPoint[] }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const hourlyChartData = (hourlyData?.data ?? []).map((h) => ({
+    ...h,
+    label: formatHour(h.hour),
+  }));
+  const peakHour = hourlyChartData.reduce(
+    (best, h) => (h.orders > best.orders ? h : best),
+    { hour: -1, orders: 0, revenue: 0, label: "" }
+  );
+  const hasHourlyData = hourlyChartData.some((h) => h.orders > 0);
 
   const maxRevenue = useMemo(
     () =>
@@ -254,6 +287,69 @@ export default function AnalyticsPage() {
                   fill="hsl(var(--secondary))"
                   radius={[3, 3, 0, 0]}
                 />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Orders by hour */}
+      {hasHourlyData && (
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Busiest Hours</CardTitle>
+            {peakHour.hour >= 0 && (
+              <span className="text-xs text-muted-foreground">
+                Peak: {peakHour.label} ({peakHour.orders} orders)
+              </span>
+            )}
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart
+                data={hourlyChartData}
+                margin={{ top: 4, right: 12, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={1}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 12,
+                    backgroundColor: "hsl(var(--popover))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 6,
+                  }}
+                  formatter={(v, name) =>
+                    name === "revenue"
+                      ? [formatCurrency(Number(v)), "Revenue"]
+                      : [v, "Orders"]
+                  }
+                  labelFormatter={(label) => `Hour: ${label}`}
+                />
+                <Bar dataKey="orders" radius={[3, 3, 0, 0]}>
+                  {hourlyChartData.map((h) => (
+                    <Cell
+                      key={h.hour}
+                      fill={
+                        h.hour === peakHour.hour
+                          ? "hsl(var(--primary))"
+                          : "hsl(var(--secondary))"
+                      }
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

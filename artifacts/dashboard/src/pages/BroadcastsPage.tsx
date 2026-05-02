@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateTime } from "@/lib/format";
-import { Radio, Plus, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Radio, Plus, Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -17,6 +17,44 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const TEMPLATES: { category: string; label: string; message: string }[] = [
+  {
+    category: "Sale",
+    label: "Flash Sale",
+    message: "🔥 *Flash Sale — Leo Tu!*\n\nPata punguzo ya *20%* kwa bidhaa zote leo. Agiza sasa kupitia WhatsApp — haraka kabla ya muda kwisha! ⏰",
+  },
+  {
+    category: "Sale",
+    label: "Weekend Offer",
+    message: "🎉 *Wikendi Special!*\n\nNunua bidhaa zaidi ya KES 1,000 na upate *delivery bure* — wikendi hii tu. Agiza sasa! 📦",
+  },
+  {
+    category: "Stock",
+    label: "New Arrivals",
+    message: "✅ *Stoo Mpya Imefika!*\n\nBidhaa mpya zimewasili dukani — maziwa safi, mkate, na zaidi. Agiza sasa kabla haijaisha! 🛒",
+  },
+  {
+    category: "Stock",
+    label: "Back in Stock",
+    message: "📦 *Bidhaa Iliyokosekana Imerudi!*\n\nHabari njema — bidhaa uliyokuwa ukitafuta ipo tena. Agiza haraka kabla hazijaisha!",
+  },
+  {
+    category: "Loyalty",
+    label: "Points Reminder",
+    message: "⭐ *Una Pointi za Zawadi!*\n\nAsante kwa ununuzi wako. Pointi zako zinaweza kupunguza bei ya order yako ijayo. Agiza leo na utumie pointi zako!",
+  },
+  {
+    category: "Reminder",
+    label: "We Miss You",
+    message: "💬 *Tumekukosa!*\n\nMuda mrefu bila kukuona. Karibu tena — bidhaa zetu bado zinasubiri. Agiza sasa kupitia WhatsApp hii! 🙏",
+  },
+  {
+    category: "Reminder",
+    label: "Holiday Greeting",
+    message: "🎊 *Salamu za Likizo!*\n\nTunakutakia likizo njema. Tuko wazi na tunasubiri kukuhudumia. Agiza bidhaa zako sasa! 🛍️",
+  },
+];
 
 const SEGMENTS: { value: "all" | "recent" | "top_customers" | "loyal"; label: string; desc: string }[] = [
   { value: "all", label: "All Customers", desc: "Message everyone" },
@@ -36,8 +74,11 @@ function NewBroadcastDialog() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<"all" | "recent" | "top_customers" | "loyal">("all");
+  const [showTemplates, setShowTemplates] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const templateCategories = Array.from(new Set(TEMPLATES.map((t) => t.category)));
 
   const createBroadcast = useCreateBroadcast({
     mutation: {
@@ -94,6 +135,49 @@ function NewBroadcastDialog() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Templates */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Use a template
+              {showTemplates ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </button>
+            {showTemplates && (
+              <div className="mt-2 space-y-2">
+                {templateCategories.map((cat) => (
+                  <div key={cat}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      {cat}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEMPLATES.filter((t) => t.category === cat).map((t) => (
+                        <button
+                          key={t.label}
+                          type="button"
+                          onClick={() => {
+                            setMessage(t.message);
+                            setShowTemplates(false);
+                          }}
+                          className="px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted hover:border-primary/40 transition-colors"
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Message */}
