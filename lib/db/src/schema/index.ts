@@ -6,3 +6,4 @@ export * from "./orders";
 export * from "./payments";
 export * from "./broadcasts";
 export * from "./whatsapp_messages";
+export * from "./order_events";

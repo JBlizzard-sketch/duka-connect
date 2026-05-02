@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAnalyticsSummary,
   useGetTopProducts,
@@ -23,7 +23,8 @@ import {
   Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Send, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -123,25 +124,63 @@ export default function AnalyticsPage() {
 
   const hasRevenueData = (dailyData?.data ?? []).some((d) => d.revenue > 0);
 
+  const { data: categoryData } = useQuery({
+    queryKey: ["analytics", "revenue-by-category", period],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/revenue-by-category?period=${period}`);
+      return r.json() as Promise<{ data: { category: string; revenue: number; orderCount: number }[] }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const hasCategoryData = (categoryData?.data ?? []).some((d) => d.revenue > 0);
+  const maxCatRevenue = categoryData?.data?.[0]?.revenue ?? 1;
+
+  const { toast } = useToast();
+  const sendDailyReport = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${BASE}/api/analytics/daily-report`, { method: "POST" });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    onSuccess: () => toast({ title: "Daily report sent", description: "WhatsApp message queued for owner" }),
+    onError: () => toast({ title: "Failed to send report", variant: "destructive" }),
+  });
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Analytics</h1>
-        <div className="flex gap-1 p-1 bg-muted rounded-lg">
-          {PERIODS.map((p) => (
-            <button
-              key={p.value}
-              data-testid={`filter-period-${p.value}`}
-              onClick={() => setPeriod(p.value as typeof period)}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                period === p.value
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <button
+            data-testid="button-send-daily-report"
+            disabled={sendDailyReport.isPending}
+            onClick={() => sendDailyReport.mutate()}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-60"
+          >
+            {sendDailyReport.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+            Send Daily Report
+          </button>
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                data-testid={`filter-period-${p.value}`}
+                onClick={() => setPeriod(p.value as typeof period)}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  period === p.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -436,6 +475,43 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue by category */}
+      {hasCategoryData && (
+        <Card>
+          <CardHeader className="px-4 pt-4 pb-2">
+            <CardTitle className="text-sm font-semibold">Revenue by Category</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-3">
+              {(categoryData?.data ?? []).map((cat) => {
+                const pct = (cat.revenue / maxCatRevenue) * 100;
+                return (
+                  <div key={cat.category}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium capitalize truncate max-w-[180px]">
+                        {cat.category}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-xs text-muted-foreground">{cat.orderCount} orders</span>
+                        <span className="text-xs font-semibold text-primary">
+                          {formatCurrency(cat.revenue)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary/70 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

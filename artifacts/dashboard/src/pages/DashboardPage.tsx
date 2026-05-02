@@ -162,6 +162,95 @@ function DailyReportButton() {
   );
 }
 
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+function StaleOrdersPanel() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: confirmedData } = useListOrders(
+    { status: "confirmed", limit: 20, page: 1 } as Parameters<typeof useListOrders>[0],
+    { query: { refetchInterval: 60_000 } }
+  );
+  const { data: preparingData } = useListOrders(
+    { status: "preparing", limit: 20, page: 1 } as Parameters<typeof useListOrders>[0],
+    { query: { refetchInterval: 60_000 } }
+  );
+
+  const now = Date.now();
+  const staleOrders = [
+    ...(confirmedData?.orders ?? []),
+    ...(preparingData?.orders ?? []),
+  ].filter((o) => now - new Date(o.createdAt).getTime() > TWO_HOURS_MS);
+
+  const advanceOrder = useUpdateOrderStatus({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+        toast({ title: "Order updated" });
+      },
+      onError: () => toast({ title: "Failed to update order", variant: "destructive" }),
+    },
+  });
+
+  if (staleOrders.length === 0) return null;
+
+  return (
+    <Card className="border-red-200 bg-red-50/60">
+      <CardHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold text-red-900 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          Stale Orders
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+            {staleOrders.length}
+          </span>
+        </CardTitle>
+        <Link href="/orders?status=confirmed">
+          <span className="text-xs text-red-700 hover:underline cursor-pointer flex items-center gap-0.5">
+            View all <ChevronRight className="h-3 w-3" />
+          </span>
+        </Link>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <div className="divide-y divide-red-100">
+          {staleOrders.map((order) => {
+            const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+            const nextStatus = o.status === "confirmed" ? "preparing" : "ready";
+            const nextLabel = o.status === "confirmed" ? "Start Prep" : "Mark Ready";
+            const isPending = advanceOrder.isPending && (advanceOrder.variables as { id: number } | undefined)?.id === o.id;
+            const hoursOld = Math.floor((now - new Date(o.createdAt).getTime()) / (60 * 60 * 1000));
+            return (
+              <div key={o.id} className="flex items-center gap-3 px-4 py-2.5">
+                <Link href={`/orders/${o.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono text-muted-foreground shrink-0">#{o.id}</span>
+                    <span className="text-xs font-medium truncate text-foreground">
+                      {o.customerName || formatPhone(o.customerPhone ?? "")}
+                    </span>
+                    <span className="text-xs text-red-600 shrink-0 font-medium">
+                      {hoursOld}h ago
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                    {o.status} · {formatCurrency(Number(o.totalAmount))}
+                  </p>
+                </Link>
+                <button
+                  disabled={advanceOrder.isPending}
+                  onClick={() => advanceOrder.mutate({ id: o.id, data: { status: nextStatus } })}
+                  className="shrink-0 flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+                >
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
+                  {nextLabel}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PendingOrdersPanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -347,6 +436,9 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Stale orders (confirmed/preparing > 2h) */}
+      <StaleOrdersPanel />
 
       {/* Pending orders action panel */}
       <PendingOrdersPanel />

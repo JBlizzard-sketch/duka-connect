@@ -158,7 +158,30 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [pointsInput, setPointsInput] = useState("");
   const [editingPoints, setEditingPoints] = useState(false);
+  const [reorderItems, setReorderItems] = useState<{ productId: number; productName: string; quantity: number; price: number; unit: string }[]>([]);
+  const [reorderLoading, setReorderLoading] = useState<number | null>(null);
   const { toast } = useToast();
+
+  async function handleReorder(orderId: number) {
+    setReorderLoading(orderId);
+    try {
+      const r = await fetch(`${BASE}/api/orders/${orderId}`);
+      const order = await r.json() as { items?: { productId: number; productName: string; quantity: string | number; unitPrice: string | number }[] };
+      const mapped = (order.items ?? []).map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: Number(item.quantity),
+        price: Number(item.unitPrice),
+        unit: "unit",
+      }));
+      setReorderItems(mapped);
+      setNewOrderOpen(true);
+    } catch {
+      toast({ title: "Failed to load order", variant: "destructive" });
+    } finally {
+      setReorderLoading(null);
+    }
+  }
   const queryClient = useQueryClient();
 
   const { data: customer, isLoading } = useGetCustomer(customerId, {
@@ -322,8 +345,9 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
           </div>
           <NewOrderDialog
             open={newOrderOpen}
-            onClose={() => setNewOrderOpen(false)}
+            onClose={() => { setNewOrderOpen(false); setReorderItems([]); }}
             initialCustomerId={customer.id}
+            initialItems={reorderItems.length > 0 ? reorderItems : undefined}
           />
 
           <div className="grid grid-cols-3 gap-3">
@@ -394,9 +418,24 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
 
           {customer.recentOrders && customer.recentOrders.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Recent Orders
-              </h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Recent Orders
+                </h4>
+                <button
+                  data-testid="button-reorder"
+                  disabled={reorderLoading !== null}
+                  onClick={() => handleReorder(customer.recentOrders![0].id)}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-60"
+                >
+                  {reorderLoading !== null ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="h-3 w-3" />
+                  )}
+                  Reorder last
+                </button>
+              </div>
               <div className="divide-y divide-border rounded-lg border overflow-hidden">
                 {customer.recentOrders.map((order) => (
                   <Link key={order.id} href={`/orders/${order.id}`} onClick={onClose}>

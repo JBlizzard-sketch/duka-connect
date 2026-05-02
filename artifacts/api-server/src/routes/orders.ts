@@ -10,6 +10,7 @@ import {
   whatsappMessagesTable,
   businessesTable,
   staffTable,
+  orderEventsTable,
 } from "@workspace/db";
 import { eq, desc, and, gte, lte, sql, count, sum } from "drizzle-orm";
 import {
@@ -333,6 +334,40 @@ router.patch("/orders/:id", async (req, res) => {
     return;
   }
 
+  // Log order activity events (fire-and-forget)
+  {
+    const eventInserts: Promise<unknown>[] = [];
+    if (statusChanged && status) {
+      const STATUS_LABELS: Record<string, string> = {
+        pending: "Pending", confirmed: "Confirmed", paid: "Paid",
+        preparing: "Preparing", ready: "Ready for Pickup", delivered: "Delivered", cancelled: "Cancelled",
+      };
+      eventInserts.push(
+        db.insert(orderEventsTable).values({
+          orderId: id,
+          event: "status_change",
+          fromStatus: current.status,
+          toStatus: status,
+          description: `Status changed: ${STATUS_LABELS[current.status] ?? current.status} → ${STATUS_LABELS[status] ?? status}`,
+        })
+      );
+    }
+    if (notes !== undefined && notes !== null) {
+      eventInserts.push(db.insert(orderEventsTable).values({ orderId: id, event: "note_updated", description: "Customer notes updated" }));
+    }
+    if (internalNotes !== undefined && internalNotes !== null) {
+      eventInserts.push(db.insert(orderEventsTable).values({ orderId: id, event: "internal_note", description: "Staff notes updated" }));
+    }
+    if (deliveryAddress !== undefined && deliveryAddress !== null) {
+      eventInserts.push(db.insert(orderEventsTable).values({ orderId: id, event: "delivery_updated", description: `Delivery address: ${deliveryAddress}` }));
+    }
+    if ("assignedToId" in bodyParsed.data) {
+      const assignedId = bodyParsed.data.assignedToId;
+      eventInserts.push(db.insert(orderEventsTable).values({ orderId: id, event: "assigned", description: assignedId ? "Assigned to staff member" : "Unassigned" }));
+    }
+    if (eventInserts.length > 0) Promise.all(eventInserts).catch(() => {});
+  }
+
   // Update customer stats only when transitioning INTO paid
   if (statusChanged && status === "paid") {
     await db
@@ -433,6 +468,21 @@ router.patch("/orders/:id", async (req, res) => {
   }
 
   res.json(updated);
+});
+
+router.get("/orders/:id/events", async (req, res) => {
+  const parsed = GetOrderParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+  const { id } = parsed.data;
+  const events = await db
+    .select()
+    .from(orderEventsTable)
+    .where(eq(orderEventsTable.orderId, id))
+    .orderBy(desc(orderEventsTable.createdAt));
+  res.json({ events });
 });
 
 export default router;

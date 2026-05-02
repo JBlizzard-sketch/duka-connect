@@ -150,6 +150,37 @@ router.get("/analytics/top-products", async (req, res) => {
   res.json({ products: topProducts, period });
 });
 
+router.get("/analytics/revenue-by-category", async (req, res) => {
+  const period = (req.query["period"] as string) ?? "week";
+  const periodStart = getPeriodStart(period);
+
+  const rows = await db
+    .select({
+      category: productsTable.category,
+      revenue: sql<number>`sum(cast(${orderItemsTable.totalPrice} as numeric))`,
+      orderCount: count(),
+    })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, eq(ordersTable.id, orderItemsTable.orderId))
+    .innerJoin(productsTable, eq(productsTable.id, orderItemsTable.productId))
+    .where(
+      and(
+        gte(ordersTable.createdAt, periodStart),
+        eq(ordersTable.status, "paid")
+      )
+    )
+    .groupBy(productsTable.category)
+    .orderBy(desc(sql`sum(cast(${orderItemsTable.totalPrice} as numeric))`));
+
+  const data = rows.map((r) => ({
+    category: r.category ?? "Uncategorised",
+    revenue: Number(r.revenue),
+    orderCount: Number(r.orderCount),
+  }));
+
+  res.json({ data, period });
+});
+
 router.get("/analytics/revenue-by-day", async (req, res) => {
   const period = (req.query["period"] as string) ?? "week";
   const periodStart = getPeriodStart(period);

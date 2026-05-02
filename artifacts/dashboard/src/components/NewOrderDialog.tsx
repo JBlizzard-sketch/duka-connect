@@ -43,15 +43,18 @@ export default function NewOrderDialog({
   open,
   onClose,
   initialCustomerId,
+  initialItems,
 }: {
   open: boolean;
   onClose: () => void;
   initialCustomerId?: number | null;
+  initialItems?: LineItem[];
 }) {
   const [step, setStep] = useState<Step>("customer");
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [items, setItems] = useState<LineItem[]>([]);
   const [notes, setNotes] = useState("");
   const [redeemPoints, setRedeemPoints] = useState(false);
@@ -86,16 +89,23 @@ export default function NewOrderDialog({
     );
   }, [customers, customerSearch]);
 
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    products.forEach((p) => { if (p.category) cats.add(p.category); });
+    return Array.from(cats).sort();
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     const q = productSearch.toLowerCase();
     return products.filter(
       (p) =>
         p.isActive &&
+        (!selectedCategory || p.category === selectedCategory) &&
         (!q ||
           p.name.toLowerCase().includes(q) ||
           (p.category ?? "").toLowerCase().includes(q))
     );
-  }, [products, productSearch]);
+  }, [products, productSearch, selectedCategory]);
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
@@ -111,13 +121,17 @@ export default function NewOrderDialog({
       setSelectedCustomerId(initialCustomerId);
       setStep("items");
     }
-  }, [open, initialCustomerId]);
+    if (open && initialItems && initialItems.length > 0) {
+      setItems(initialItems);
+    }
+  }, [open, initialCustomerId, initialItems]);
 
   function handleClose() {
     setStep("customer");
     setSelectedCustomerId(null);
     setCustomerSearch("");
     setProductSearch("");
+    setSelectedCategory(null);
     setItems([]);
     setNotes("");
     setRedeemPoints(false);
@@ -307,6 +321,37 @@ export default function NewOrderDialog({
                   className="w-full pl-9 pr-4 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />
               </div>
+
+              {/* Category filter chips */}
+              {categories.length > 1 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setSelectedCategory(null)}
+                    className={cn(
+                      "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                      selectedCategory === null
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:bg-muted text-muted-foreground"
+                    )}
+                  >
+                    All
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-full border transition-colors capitalize",
+                        selectedCategory === cat
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Product grid */}
               <div className="grid grid-cols-1 gap-1.5 max-h-52 overflow-y-auto">

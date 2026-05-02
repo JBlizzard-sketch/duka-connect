@@ -1,9 +1,9 @@
 import { useRoute, Link } from "wouter";
 import { useGetOrder, useUpdateOrderStatus, useInitiatePayment, useListStaff, getGetOrderQueryKey, getGetOrdersSummaryQueryKey } from "@workspace/api-client-react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateTime, formatPhone } from "@/lib/format";
-import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send, Lock } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, CreditCard, Loader2, MessageCircle, Pencil, Check, X, Printer, ExternalLink, Send, Lock, Clock, ArrowRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusBadge, { PaymentBadge } from "@/components/StatusBadge";
@@ -765,6 +765,111 @@ export default function OrderDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Activity timeline */}
+      <OrderTimeline orderId={id} />
     </div>
+  );
+}
+
+interface OrderEvent {
+  id: number;
+  orderId: number;
+  event: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  description: string;
+  createdAt: string;
+}
+
+const EVENT_ICONS: Record<string, string> = {
+  status_change: "🔄",
+  note_updated: "📝",
+  internal_note: "🔒",
+  delivery_updated: "📍",
+  assigned: "👤",
+};
+
+const EVENT_COLORS: Record<string, string> = {
+  status_change: "bg-primary",
+  note_updated: "bg-blue-500",
+  internal_note: "bg-amber-500",
+  delivery_updated: "bg-violet-500",
+  assigned: "bg-teal-500",
+};
+
+function OrderTimeline({ orderId }: { orderId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["order-events", orderId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/orders/${orderId}/events`);
+      return r.json() as Promise<{ events: OrderEvent[] }>;
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const events = data?.events ?? [];
+
+  if (isLoading) {
+    return (
+      <Card data-print-hide>
+        <CardHeader className="px-4 pt-4 pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="space-y-3">
+            {[1, 2].map((i) => <div key={i} className="h-8 bg-muted animate-pulse rounded-md" />)}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (events.length === 0) return null;
+
+  return (
+    <Card data-print-hide>
+      <CardHeader className="px-4 pt-4 pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          Activity
+          <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            {events.length} event{events.length !== 1 ? "s" : ""}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        <div className="relative">
+          <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+          <div className="space-y-4 pl-8">
+            {events.map((ev) => (
+              <div key={ev.id} className="relative">
+                <div className={`absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full ring-2 ring-background ${EVENT_COLORS[ev.event] ?? "bg-muted-foreground"}`} />
+                <div>
+                  <p className="text-xs font-medium leading-snug">
+                    <span className="mr-1">{EVENT_ICONS[ev.event] ?? "•"}</span>
+                    {ev.description}
+                  </p>
+                  {ev.event === "status_change" && ev.fromStatus && ev.toStatus && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                      <span className="capitalize">{ev.fromStatus}</span>
+                      <ArrowRight className="h-2.5 w-2.5" />
+                      <span className="capitalize font-medium text-foreground">{ev.toStatus}</span>
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {formatDateTime(ev.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
