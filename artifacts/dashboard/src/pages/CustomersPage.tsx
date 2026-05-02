@@ -281,16 +281,26 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Orders", value: String(customer.totalOrders) },
-              { label: "Total Spend", value: formatCurrency(Number(customer.totalSpend)) },
-              { label: "Loyalty Pts", value: String(customer.loyaltyPoints) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-muted rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-sm font-bold mt-0.5">{value}</p>
-              </div>
-            ))}
+            <div className="bg-muted rounded-lg p-3 text-center">
+              <p className="text-xs text-muted-foreground">Orders</p>
+              <p className="text-sm font-bold mt-0.5">{customer.totalOrders}</p>
+            </div>
+            <div className="bg-muted rounded-lg p-3 text-center">
+              <p className="text-xs text-muted-foreground">Total Spend</p>
+              <p className="text-sm font-bold mt-0.5">{formatCurrency(Number(customer.totalSpend))}</p>
+            </div>
+            <div className="bg-muted rounded-lg p-3 text-center">
+              <p className="text-xs text-muted-foreground">Loyalty</p>
+              <p className="text-sm font-bold mt-0.5">{customer.loyaltyPoints} pts</p>
+              {(() => {
+                const tier = getLoyaltyTier(customer.loyaltyPoints);
+                return tier ? (
+                  <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border leading-none mt-1 ${tier.className}`}>
+                    {tier.label}
+                  </span>
+                ) : null;
+              })()}
+            </div>
           </div>
 
           {customer.lastOrderAt && (

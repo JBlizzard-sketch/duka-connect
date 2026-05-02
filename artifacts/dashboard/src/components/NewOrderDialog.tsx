@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useListCustomers,
   useListProducts,
@@ -42,9 +42,11 @@ type Step = "customer" | "items" | "review";
 export default function NewOrderDialog({
   open,
   onClose,
+  initialCustomerId,
 }: {
   open: boolean;
   onClose: () => void;
+  initialCustomerId?: number | null;
 }) {
   const [step, setStep] = useState<Step>("customer");
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
@@ -100,6 +102,13 @@ export default function NewOrderDialog({
   const maxRedeemable = Math.min(availablePoints, Math.floor(subtotal / 100) * 100);
   const loyaltyDiscount = redeemPoints && maxRedeemable > 0 ? maxRedeemable : 0;
   const total = Math.max(0, subtotal - loyaltyDiscount);
+
+  useEffect(() => {
+    if (open && initialCustomerId) {
+      setSelectedCustomerId(initialCustomerId);
+      setStep("items");
+    }
+  }, [open, initialCustomerId]);
 
   function handleClose() {
     setStep("customer");

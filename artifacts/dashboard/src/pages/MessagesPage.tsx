@@ -14,9 +14,11 @@ import {
   X,
   Loader2,
   CheckCircle2,
+  PlusCircle,
 } from "lucide-react";
 import { formatTimeAgo, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import NewOrderDialog from "@/components/NewOrderDialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -397,6 +399,7 @@ export default function MessagesPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(initCustomerId);
   const [replyText, setReplyText] = useState("");
   const [showThread, setShowThread] = useState(initCustomerId !== null);
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -565,13 +568,20 @@ export default function MessagesPage() {
                   )}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {(selectedConv?.totalOrders ?? 0) > 0 && (
                   <div className="hidden sm:flex items-center gap-1 text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
                     <ShoppingCart className="h-3 w-3" />
                     {selectedConv?.totalOrders} orders
                   </div>
                 )}
+                <button
+                  onClick={() => setNewOrderOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">New Order</span>
+                </button>
                 <Link href={`/customers`}>
                   <button className="text-xs text-muted-foreground hover:text-foreground transition-colors hidden sm:block">
                     View profile →
@@ -579,6 +589,11 @@ export default function MessagesPage() {
                 </Link>
               </div>
             </div>
+            <NewOrderDialog
+              open={newOrderOpen}
+              onClose={() => setNewOrderOpen(false)}
+              initialCustomerId={selectedCustomerId}
+            />
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4">

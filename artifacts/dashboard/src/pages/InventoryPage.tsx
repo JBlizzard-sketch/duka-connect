@@ -602,6 +602,14 @@ export default function InventoryPage() {
     ? allProducts.filter((p) => p.category === categoryFilter)
     : allProducts;
 
+  const totalStockValue = allProducts.reduce(
+    (sum, p) => sum + (p.totalStock ?? 0) * Number(p.basePrice ?? 0),
+    0
+  );
+  const lowStockCount = allProducts.filter(
+    (p) => (p.totalStock ?? 0) <= Number(p.lowStockThreshold ?? 0) && (p.totalStock ?? 0) >= 0
+  ).length;
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
@@ -619,6 +627,30 @@ export default function InventoryPage() {
           />
         </div>
       </div>
+
+      {/* Stock value summary */}
+      {!isLoading && allProducts.length > 0 && (
+        <div className="flex items-center gap-4 text-sm flex-wrap">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Package className="h-3.5 w-3.5" />
+            <span className="font-medium text-foreground">{allProducts.length}</span> products
+          </div>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            Stock value:
+            <span className="font-semibold text-foreground">{formatCurrency(totalStockValue)}</span>
+          </div>
+          {lowStockCount > 0 && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <div className="flex items-center gap-1.5 text-amber-600">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span className="font-medium">{lowStockCount} low stock</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Search & filters */}
       <div className="flex items-center gap-3 flex-wrap">
