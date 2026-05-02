@@ -252,18 +252,17 @@ router.patch("/products/:id/variants/:variantId", async (req, res) => {
   if (stockQuantity !== undefined) updates.stockQuantity = String(stockQuantity);
   updates.updatedAt = new Date();
 
-  let updateQuery = db
+  const finalSet =
+    stockAdjustment !== undefined
+      ? {
+          ...updates,
+          stockQuantity: sql`cast(${productVariantsTable.stockQuantity} as numeric) + ${stockAdjustment}`,
+        }
+      : updates;
+
+  const [updated] = await db
     .update(productVariantsTable)
-    .set(updates);
-
-  if (stockAdjustment !== undefined) {
-    updateQuery = db.update(productVariantsTable).set({
-      ...updates,
-      stockQuantity: sql`cast(${productVariantsTable.stockQuantity} as numeric) + ${stockAdjustment}`,
-    });
-  }
-
-  const [updated] = await (updateQuery as ReturnType<typeof db.update>)
+    .set(finalSet)
     .where(eq(productVariantsTable.id, paramsParsed.data.variantId))
     .returning();
 

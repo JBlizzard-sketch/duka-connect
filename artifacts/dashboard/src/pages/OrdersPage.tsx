@@ -20,16 +20,31 @@ const STATUSES = [
 
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useListOrders({
     status: statusFilter || undefined,
     page,
-    limit: 25,
+    limit: 50,
   } as Parameters<typeof useListOrders>[0]);
 
-  const orders = data?.orders ?? [];
+  const allOrders = data?.orders ?? [];
   const meta = data?.meta;
+
+  const orders = search.trim()
+    ? allOrders.filter((order) => {
+        const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+        const q = search.toLowerCase();
+        const waRef = (o.notes?.match(/WA-[A-Z0-9]+/)?.[0] ?? "").toLowerCase();
+        return (
+          String(o.id).includes(q) ||
+          (o.customerName ?? "").toLowerCase().includes(q) ||
+          (o.customerPhone ?? "").includes(q) ||
+          waRef.includes(q)
+        );
+      })
+    : allOrders;
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
@@ -37,12 +52,24 @@ export default function OrdersPage() {
         <h1 className="text-xl font-bold">Orders</h1>
         {meta && (
           <span className="text-sm text-muted-foreground">
-            {meta.total} total
+            {search ? `${orders.length} of ${meta.total}` : `${meta.total} total`}
           </span>
         )}
       </div>
 
-      {/* Filters */}
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          data-testid="input-search-orders"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, phone or WA ref…"
+          className="pl-8 text-sm h-9"
+        />
+      </div>
+
+      {/* Status filters */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {STATUSES.map((s) => (
           <button

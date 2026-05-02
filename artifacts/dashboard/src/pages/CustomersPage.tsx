@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   useListCustomers,
   useGetCustomer,
   getGetCustomerQueryKey,
 } from "@workspace/api-client-react";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
-import { Search, Users, ChevronRight, Star, Loader2 } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -34,14 +36,22 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
         <p className="text-sm text-muted-foreground">Not found.</p>
       ) : (
         <div className="space-y-5">
-          <div>
-            <h3 className="font-semibold text-base">{customer.name || "Unknown"}</h3>
-            <p
-              data-testid="text-customer-phone"
-              className="text-sm text-muted-foreground mt-0.5"
-            >
-              {formatPhone(customer.whatsappPhone)}
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-base">{customer.name || "Unknown"}</h3>
+              <p
+                data-testid="text-customer-phone"
+                className="text-sm text-muted-foreground mt-0.5"
+              >
+                {formatPhone(customer.whatsappPhone)}
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline" className="shrink-0 gap-1.5">
+              <Link href={`/messages?customerId=${customer.id}`} onClick={onClose}>
+                <MessageCircle className="h-3.5 w-3.5" />
+                Message
+              </Link>
+            </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">

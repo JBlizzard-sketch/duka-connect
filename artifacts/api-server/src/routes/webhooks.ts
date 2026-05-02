@@ -9,7 +9,7 @@ import {
   productsTable,
   productVariantsTable,
 } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendTextMessage, buildOrderConfirmation } from "../lib/whatsapp";
 import {
@@ -93,7 +93,8 @@ async function processInboundMessage(
   }
 
   const isCatalog = body ? isCatalogRequest(body) : false;
-  const isOrderMsg = body && !isCatalog ? isLikelyOrderMessage(body) : false;
+  const isStatus = body && !isCatalog ? isStatusInquiry(body) : false;
+  const isOrderMsg = body && !isCatalog && !isStatus ? isLikelyOrderMessage(body) : false;
 
   await db.insert(whatsappMessagesTable).values({
     businessId: 1,
@@ -107,12 +108,14 @@ async function processInboundMessage(
   });
 
   logger.info(
-    { phone, messageType, body: body?.slice(0, 100), isOrderMsg, isCatalog },
+    { phone, messageType, body: body?.slice(0, 100), isOrderMsg, isCatalog, isStatus },
     "WhatsApp message received"
   );
 
   if (body && isCatalog) {
     await handleCatalogMessage(customer, phone);
+  } else if (body && isStatus) {
+    await handleStatusInquiry(customer, phone);
   } else if (body && isOrderMsg) {
     await handleOrderMessage(customer, phone, body);
   } else if (body) {
@@ -239,7 +242,7 @@ async function handleOrderMessage(
         productId: item.productId,
         variantId: item.variantId,
         productName: item.productName,
-        quantity: item.quantity,
+        quantity: String(item.quantity),
         unit: item.unit,
         unitPrice: String(item.unitPrice),
         totalPrice: String(item.totalPrice),
@@ -411,6 +414,89 @@ async function handleCatalogMessage(
     logger.info({ phone, productCount: products.length }, "Catalog sent");
   } catch (err) {
     logger.error({ err, phone }, "Error sending catalog");
+  }
+}
+
+function isStatusInquiry(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const statusKeywords = [
+    "status", "order yangu", "maagizo yangu", "iko wapi", "imefika",
+    "nimepata", "lini", "when", "ready", "iko tayari", "delivered",
+    "imefika", "track", "fuatilia", "my order", "order#", "order #",
+    "imekwama", "amri yangu", "nimeweka order",
+  ];
+  return statusKeywords.some((kw) => lower.includes(kw));
+}
+
+async function handleStatusInquiry(
+  customer: typeof customersTable.$inferSelect,
+  phone: string
+) {
+  try {
+    const STATUS_LABELS: Record<string, string> = {
+      pending:    "⏳ Pending / Inasubiri",
+      confirmed:  "✅ Confirmed / Imethibitishwa",
+      paid:       "💚 Paid / Imelipwa",
+      preparing:  "👨‍🍳 Preparing / Inaandaliwa",
+      ready:      "📦 Ready / Iko tayari",
+      delivered:  "🚀 Delivered / Imefika",
+      cancelled:  "❌ Cancelled / Imefutwa",
+    };
+
+    const [latestOrder] = await db
+      .select({
+        id: ordersTable.id,
+        status: ordersTable.status,
+        totalAmount: ordersTable.totalAmount,
+        createdAt: ordersTable.createdAt,
+        notes: ordersTable.notes,
+      })
+      .from(ordersTable)
+      .where(eq(ordersTable.customerId, customer.id))
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(1);
+
+    const name = customer.name ?? customer.whatsappName ?? "";
+    const greeting = name ? `Habari ${name}! 👋` : "Habari! 👋";
+
+    if (!latestOrder) {
+      await sendAndLogMessage(
+        phone,
+        customer.id,
+        `${greeting}\n\nHaujawahi kuweka order bado. 😊\n(You haven't placed any orders yet.)\n\nTuma orodha ya bidhaa unazotaka ili tuanze!`
+      );
+      return;
+    }
+
+    const waRef = latestOrder.notes?.match(/WA-[A-Z0-9]+/)?.[0];
+    const statusLabel = STATUS_LABELS[latestOrder.status] ?? latestOrder.status;
+    const amount = `KES ${Number(latestOrder.totalAmount).toLocaleString()}`;
+
+    let msg =
+      `${greeting}\n\n` +
+      `📋 *Order #${latestOrder.id}*` +
+      (waRef ? ` (${waRef})` : "") + `\n` +
+      `Status: *${statusLabel}*\n` +
+      `Amount: ${amount}\n\n`;
+
+    if (latestOrder.status === "ready") {
+      msg += `Order yako iko tayari kukusanywa! 🎉\n(Your order is ready for collection!)`;
+    } else if (latestOrder.status === "delivered") {
+      msg += `Order imefika! Asante kwa biashara. 🙏\n(Your order has been delivered! Thanks for your business.)`;
+    } else if (latestOrder.status === "preparing") {
+      msg += `Tunaandaa order yako sasa hivi. 👨‍🍳\n(We're preparing your order right now.)`;
+    } else if (latestOrder.status === "paid") {
+      msg += `Malipo yamepokelewa! Tunaanza kuandaa order yako. 🙏\n(Payment received! We're starting on your order.)`;
+    } else if (latestOrder.status === "pending") {
+      msg += `Order yako inasubiri uthibitisho. Tutawasiliana nawe hivi karibuni.\n(Your order is awaiting confirmation. We'll be in touch shortly.)`;
+    } else if (latestOrder.status === "cancelled") {
+      msg += `Order hii ilifutwa. Tafadhali wasiliana nasi kwa maelezo zaidi.\n(This order was cancelled. Please contact us for more details.)`;
+    }
+
+    await sendAndLogMessage(phone, customer.id, msg);
+    logger.info({ phone, orderId: latestOrder.id }, "Order status sent via WhatsApp");
+  } catch (err) {
+    logger.error({ err, phone }, "Error sending order status");
   }
 }
 

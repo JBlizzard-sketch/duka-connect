@@ -104,7 +104,7 @@ async function sendBroadcastMessages(
 
   const results = await batchProcess(
     recipients,
-    async (customer) => {
+    async (customer: typeof customersTable.$inferSelect) => {
       const result = await sendTextMessage(customer.whatsappPhone, message);
       return { customerId: customer.id, result };
     },
