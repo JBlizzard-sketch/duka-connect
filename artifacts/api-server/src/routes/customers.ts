@@ -6,6 +6,8 @@ import {
   ListCustomersQueryParams,
   GetCustomerParams,
   GetTopCustomersQueryParams,
+  UpdateCustomerParams,
+  UpdateCustomerBody,
 } from "@workspace/api-zod";
 
 const router = Router();
@@ -97,6 +99,33 @@ router.get("/customers/:id", async (req, res) => {
     .limit(10);
 
   res.json({ ...customer, recentOrders });
+});
+
+router.patch("/customers/:id", async (req, res) => {
+  const paramsParsed = UpdateCustomerParams.safeParse(req.params);
+  const bodyParsed = UpdateCustomerBody.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+
+  const updates: Partial<typeof customersTable.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if ("name" in bodyParsed.data) updates.name = bodyParsed.data.name ?? null;
+
+  const [updated] = await db
+    .update(customersTable)
+    .set(updates)
+    .where(eq(customersTable.id, paramsParsed.data.id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
+  res.json(updated);
 });
 
 export default router;

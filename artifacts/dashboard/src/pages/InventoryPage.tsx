@@ -4,6 +4,7 @@ import {
   useCreateProduct,
   useDeleteProduct,
   useGetProduct,
+  useUpdateProduct,
   useUpdateProductVariant,
   getListProductsQueryKey,
   getGetProductQueryKey,
@@ -19,6 +20,7 @@ import {
   Trash2,
   Pencil,
   Minus,
+  Edit2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -30,6 +32,100 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+function EditProductDialog({
+  product,
+  onUpdated,
+}: {
+  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string };
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: product.name,
+    category: product.category ?? "",
+    basePrice: String(product.basePrice),
+    unit: product.unit,
+  });
+  const { toast } = useToast();
+  const updateProduct = useUpdateProduct({
+    mutation: {
+      onSuccess: () => {
+        setOpen(false);
+        onUpdated();
+        toast({ title: "Product updated" });
+      },
+      onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    },
+  });
+
+  function handleOpen(e: React.MouseEvent) {
+    e.stopPropagation();
+    setForm({
+      name: product.name,
+      category: product.category ?? "",
+      basePrice: String(product.basePrice),
+      unit: product.unit,
+    });
+    setOpen(true);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          data-testid={`button-edit-product-${product.id}`}
+          onClick={handleOpen}
+          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors shrink-0"
+          title="Edit product"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Product</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          {[
+            { key: "name", label: "Product Name", placeholder: "e.g. Panadol 500mg" },
+            { key: "category", label: "Category", placeholder: "e.g. Medicine" },
+            { key: "basePrice", label: "Price (KES)", placeholder: "50", type: "number" },
+            { key: "unit", label: "Unit", placeholder: "piece" },
+          ].map(({ key, label, placeholder, type }) => (
+            <div key={key}>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{label}</label>
+              <input
+                type={type ?? "text"}
+                value={form[key as keyof typeof form]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          ))}
+          <button
+            disabled={!form.name || !form.basePrice || updateProduct.isPending}
+            onClick={() =>
+              updateProduct.mutate({
+                id: product.id,
+                data: {
+                  name: form.name,
+                  category: form.category || undefined,
+                  basePrice: Number(form.basePrice),
+                  unit: form.unit,
+                },
+              })
+            }
+            className="w-full bg-primary text-primary-foreground text-sm font-medium py-2 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors"
+          >
+            {updateProduct.isPending ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function AddProductDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
@@ -372,6 +468,18 @@ export default function InventoryPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      <EditProductDialog
+                        product={{
+                          id: product.id,
+                          name: product.name,
+                          category: product.category,
+                          basePrice: Number(product.basePrice),
+                          unit: product.unit,
+                        }}
+                        onUpdated={() =>
+                          queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+                        }
+                      />
                       <StockAdjustDialog
                         productId={product.id}
                         productName={product.name}

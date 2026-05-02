@@ -556,6 +556,29 @@ export const GetCustomerResponse = zod
   );
 
 /**
+ * @summary Update customer name or notes
+ */
+export const UpdateCustomerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCustomerBody = zod.object({
+  name: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdateCustomerResponse = zod.object({
+  id: zod.number(),
+  whatsappPhone: zod.string(),
+  name: zod.string().nullish(),
+  totalOrders: zod.number(),
+  totalSpend: zod.number(),
+  loyaltyPoints: zod.number(),
+  lastOrderAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Top customers by spend or order count
  */
 export const getTopCustomersQueryByDefault = `spend`;

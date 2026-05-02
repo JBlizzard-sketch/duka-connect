@@ -255,6 +255,11 @@ export type CustomerDetail = Customer & {
   recentOrders: Order[];
 };
 
+export interface UpdateCustomerRequest {
+  name?: string | null;
+  notes?: string | null;
+}
+
 export interface CustomerListResponse {
   customers: Customer[];
   meta: PaginationMeta;

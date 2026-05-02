@@ -3,12 +3,16 @@ import { Link } from "wouter";
 import {
   useListCustomers,
   useGetCustomer,
+  useUpdateCustomer,
   getGetCustomerQueryKey,
+  getListCustomersQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency, formatDate, formatPhone, formatTimeAgo } from "@/lib/format";
-import { Search, Users, ChevronRight, Star, Loader2, MessageCircle } from "lucide-react";
+import { Search, Users, ChevronRight, Star, Loader2, MessageCircle, Pencil, Check, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -16,11 +20,38 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import StatusBadge from "@/components/StatusBadge";
+import { useToast } from "@/hooks/use-toast";
 
 function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: () => void }) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: customer, isLoading } = useGetCustomer(customerId, {
     query: { enabled: !!customerId, queryKey: getGetCustomerQueryKey(customerId) },
   });
+
+  const updateCustomer = useUpdateCustomer({
+    mutation: {
+      onSuccess: () => {
+        setEditingName(false);
+        queryClient.invalidateQueries({ queryKey: getGetCustomerQueryKey(customerId) });
+        queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+        toast({ title: "Name saved" });
+      },
+      onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    },
+  });
+
+  function startEdit() {
+    setNameInput(customer?.name ?? "");
+    setEditingName(true);
+  }
+
+  function saveName() {
+    updateCustomer.mutate({ id: customerId, data: { name: nameInput.trim() || null } });
+  }
 
   return (
     <SheetContent className="w-full sm:max-w-md overflow-y-auto">
@@ -37,8 +68,52 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
       ) : (
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-semibold text-base">{customer.name || "Unknown"}</h3>
+            <div className="flex-1 min-w-0">
+              {editingName ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveName();
+                      if (e.key === "Escape") setEditingName(false);
+                    }}
+                    placeholder="Customer name…"
+                    className="h-8 text-sm"
+                  />
+                  <button
+                    onClick={saveName}
+                    disabled={updateCustomer.isPending}
+                    className="p-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    {updateCustomer.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setEditingName(false)}
+                    className="p-1.5 rounded border border-border hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 group">
+                  <h3 className="font-semibold text-base">
+                    {customer.name || <span className="text-muted-foreground font-normal italic">No name set</span>}
+                  </h3>
+                  <button
+                    onClick={startEdit}
+                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-muted transition-all text-muted-foreground"
+                    title="Edit name"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <p
                 data-testid="text-customer-phone"
                 className="text-sm text-muted-foreground mt-0.5"

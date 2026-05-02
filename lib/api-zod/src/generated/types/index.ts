@@ -62,6 +62,7 @@ export * from "./staffRole";
 export * from "./topProduct";
 export * from "./topProductsResponse";
 export * from "./updateBusinessProfileRequest";
+export * from "./updateCustomerRequest";
 export * from "./updateOrderStatusRequest";
 export * from "./updateProductRequest";
 export * from "./updateStaffRequest";

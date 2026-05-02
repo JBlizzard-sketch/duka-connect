@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGetOrdersSummary, useGetLowStockProducts, useListOrders } from "@workspace/api-client-react";
-import { formatCurrency, formatTimeAgo } from "@/lib/format";
+import { formatCurrency, formatTimeAgo, formatPhone } from "@/lib/format";
 import { Link } from "wouter";
 import { ShoppingCart, TrendingUp, AlertTriangle, Clock, Package, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -180,30 +180,44 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {recentOrders.orders.map((order) => (
-                <Link key={order.id} href={`/orders/${order.id}`}>
-                  <div
-                    data-testid={`row-order-${order.id}`}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-muted-foreground">
-                          #{order.id}
-                        </span>
-                        <StatusBadge status={order.status} />
+              {recentOrders.orders.map((order) => {
+                const o = order as typeof order & { customerName?: string | null; customerPhone?: string | null };
+                return (
+                  <Link key={o.id} href={`/orders/${o.id}`}>
+                    <div
+                      data-testid={`row-order-${o.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono text-muted-foreground">
+                            #{o.id}
+                          </span>
+                          <StatusBadge status={o.status} />
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {o.customerName ? (
+                            <p className="text-xs font-medium text-foreground truncate max-w-[160px]">
+                              {o.customerName}
+                            </p>
+                          ) : o.customerPhone ? (
+                            <p className="text-xs text-muted-foreground">
+                              {formatPhone(o.customerPhone)}
+                            </p>
+                          ) : null}
+                          <span className="text-xs text-muted-foreground">
+                            · {formatTimeAgo(o.createdAt)}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {formatTimeAgo(order.createdAt)}
-                      </p>
+                      <div className="text-sm font-semibold text-foreground shrink-0">
+                        {formatCurrency(Number(o.totalAmount))}
+                      </div>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     </div>
-                    <div className="text-sm font-semibold text-foreground shrink-0">
-                      {formatCurrency(Number(order.totalAmount))}
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </CardContent>
