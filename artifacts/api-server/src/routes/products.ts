@@ -273,6 +273,29 @@ router.patch("/products/:id/variants/:variantId", async (req, res) => {
   res.json(updated);
 });
 
+// DELETE /api/products/:id/variants/:variantId
+router.delete("/products/:id/variants/:variantId", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const variantId = parseInt(req.params.variantId, 10);
+  if (isNaN(id) || isNaN(variantId)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const remaining = await db
+    .select({ count: count() })
+    .from(productVariantsTable)
+    .where(eq(productVariantsTable.productId, id));
+  const total = Number(remaining[0]?.count ?? 0);
+  if (total <= 1) {
+    res.status(400).json({ error: "Cannot delete the last variant" });
+    return;
+  }
+
+  await db.delete(productVariantsTable).where(eq(productVariantsTable.id, variantId));
+  res.status(204).end();
+});
+
 // POST /api/products/import
 // Bulk-create products from a parsed CSV payload.
 router.post("/products/import", async (req, res) => {

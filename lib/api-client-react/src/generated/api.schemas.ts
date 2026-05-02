@@ -260,6 +260,7 @@ export type CustomerDetail = Customer & {
 export interface UpdateCustomerRequest {
   name?: string | null;
   notes?: string | null;
+  loyaltyPointsAdjust?: number;
 }
 
 export interface CustomerListResponse {

@@ -89,6 +89,32 @@ export default function OrderDetailPage() {
     onError: () => toast({ title: "Failed to send payment request", variant: "destructive" }),
   });
 
+  const sendReceipt = useMutation({
+    mutationFn: async () => {
+      if (!order?.customer?.id) throw new Error("No customer");
+      const itemLines = (order.items ?? [])
+        .map((item) => `  • ${item.productName}${item.variantName ? ` (${item.variantName})` : ""} × ${item.quantity} — KES ${Number(item.totalPrice).toLocaleString()}`)
+        .join("\n");
+      const text =
+        `🧾 *Risiti ya Agiza #${order.id}*\n\n` +
+        `${itemLines}\n\n` +
+        `━━━━━━━━━━━━━━\n` +
+        `💰 *Jumla: KES ${Math.round(Number(order.totalAmount)).toLocaleString()}*\n\n` +
+        `Hali: *${order.status.toUpperCase()}*\n` +
+        (order.payment?.mpesaReceiptNumber ? `Mpesa: ${order.payment.mpesaReceiptNumber}\n` : "") +
+        `\nAsante kwa ununuzi wako! 🙏`;
+      const r = await fetch(`${BASE}/api/messages/thread/${order.customer.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) throw new Error("Send failed");
+      return r.json();
+    },
+    onSuccess: () => toast({ title: "Receipt sent on WhatsApp" }),
+    onError: () => toast({ title: "Failed to send receipt", variant: "destructive" }),
+  });
+
   const initiatePayment = useInitiatePayment({
     mutation: {
       onSuccess: () => {
@@ -290,6 +316,19 @@ export default function OrderDetailPage() {
                     Pay Request
                   </button>
                 )}
+                <button
+                  onClick={() => sendReceipt.mutate()}
+                  disabled={sendReceipt.isPending}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border hover:bg-muted px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                  title="Send order receipt via WhatsApp"
+                >
+                  {sendReceipt.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  )}
+                  Send Receipt
+                </button>
               </div>
             </div>
           </CardContent>

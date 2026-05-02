@@ -161,12 +161,29 @@ router.patch("/customers/:id", async (req, res) => {
     updatedAt: new Date(),
   };
   if ("name" in bodyParsed.data) updates.name = bodyParsed.data.name ?? null;
+  if ("notes" in bodyParsed.data) (updates as Record<string, unknown>).notes = bodyParsed.data.notes ?? null;
 
-  const [updated] = await db
-    .update(customersTable)
-    .set(updates)
-    .where(eq(customersTable.id, paramsParsed.data.id))
-    .returning();
+  let updated: typeof customersTable.$inferSelect | undefined;
+
+  if (bodyParsed.data.loyaltyPointsAdjust !== undefined) {
+    const adj = bodyParsed.data.loyaltyPointsAdjust;
+    const [result] = await db
+      .update(customersTable)
+      .set({
+        ...updates,
+        loyaltyPoints: sql`greatest(0, ${customersTable.loyaltyPoints} + ${adj})`,
+      })
+      .where(eq(customersTable.id, paramsParsed.data.id))
+      .returning();
+    updated = result;
+  } else {
+    const [result] = await db
+      .update(customersTable)
+      .set(updates)
+      .where(eq(customersTable.id, paramsParsed.data.id))
+      .returning();
+    updated = result;
+  }
 
   if (!updated) {
     res.status(404).json({ error: "Customer not found" });

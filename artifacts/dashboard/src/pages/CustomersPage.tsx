@@ -147,6 +147,8 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [pointsInput, setPointsInput] = useState("");
+  const [editingPoints, setEditingPoints] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -174,6 +176,19 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
         toast({ title: "Notes saved" });
       },
       onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    },
+  });
+
+  const adjustPoints = useUpdateCustomer({
+    mutation: {
+      onSuccess: () => {
+        setEditingPoints(false);
+        setPointsInput("");
+        queryClient.invalidateQueries({ queryKey: getGetCustomerQueryKey(customerId) });
+        queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+        toast({ title: "Loyalty points updated" });
+      },
+      onError: () => toast({ title: "Update failed", variant: "destructive" }),
     },
   });
 
@@ -318,6 +333,43 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
               })()}
             </div>
           </div>
+
+          {/* Loyalty points manual adjustment */}
+          {editingPoints ? (
+            <div className="flex items-center gap-2 bg-muted/40 rounded-lg p-2.5">
+              <span className="text-xs text-muted-foreground shrink-0">Adjust points:</span>
+              <input
+                type="number"
+                autoFocus
+                value={pointsInput}
+                onChange={(e) => setPointsInput(e.target.value)}
+                placeholder="e.g. +50 or -10"
+                className="flex-1 border border-input rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onKeyDown={(e) => { if (e.key === "Escape") { setEditingPoints(false); setPointsInput(""); } }}
+              />
+              <button
+                disabled={!pointsInput || isNaN(parseInt(pointsInput, 10)) || adjustPoints.isPending}
+                onClick={() => adjustPoints.mutate({ id: customerId, data: { loyaltyPointsAdjust: parseInt(pointsInput, 10) } })}
+                className="px-2 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0"
+              >
+                {adjustPoints.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+              </button>
+              <button
+                onClick={() => { setEditingPoints(false); setPointsInput(""); }}
+                className="p-1 rounded border border-border hover:bg-muted transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEditingPoints(true)}
+              className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-border/80 rounded-lg py-1.5 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Star className="h-3 w-3" />
+              Adjust loyalty points
+            </button>
+          )}
 
           {customer.lastOrderAt && (
             <p className="text-xs text-muted-foreground">

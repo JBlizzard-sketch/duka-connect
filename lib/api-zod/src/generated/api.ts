@@ -571,6 +571,7 @@ export const UpdateCustomerParams = zod.object({
 export const UpdateCustomerBody = zod.object({
   name: zod.string().nullish(),
   notes: zod.string().nullish(),
+  loyaltyPointsAdjust: zod.number().int().optional(),
 });
 
 export const UpdateCustomerResponse = zod.object({

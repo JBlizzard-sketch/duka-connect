@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import {
   useListProducts,
   useCreateProduct,
+  useCreateProductVariant,
   useDeleteProduct,
   useGetProduct,
   useUpdateProduct,
@@ -26,6 +27,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   X,
+  Layers,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -500,6 +502,185 @@ function StockAdjustDialog({
   );
 }
 
+function ManageVariantsDialog({
+  productId,
+  productName,
+  onUpdated,
+}: {
+  productId: number;
+  productName: string;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", price: "", stockQuantity: "", lowStockThreshold: "5" });
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: product, isLoading, refetch } = useGetProduct(productId, {
+    query: { enabled: open, queryKey: getGetProductQueryKey(productId) },
+  });
+
+  const createVariant = useCreateProductVariant({
+    mutation: {
+      onSuccess: () => {
+        setForm({ name: "", price: "", stockQuantity: "", lowStockThreshold: "5" });
+        refetch();
+        queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        onUpdated();
+        toast({ title: "Variant added" });
+      },
+      onError: () => toast({ title: "Failed to add variant", variant: "destructive" }),
+    },
+  });
+
+  const deleteVariant = useMutation({
+    mutationFn: async (variantId: number) => {
+      const r = await fetch(`${BASE}/api/products/${productId}/variants/${variantId}`, { method: "DELETE" });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "Delete failed");
+      }
+    },
+    onSuccess: () => {
+      setDeletingId(null);
+      refetch();
+      queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      onUpdated();
+      toast({ title: "Variant removed" });
+    },
+    onError: (e: Error) => {
+      setDeletingId(null);
+      toast({ title: e.message, variant: "destructive" });
+    },
+  });
+
+  const variants = product?.variants ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm({ name: "", price: "", stockQuantity: "", lowStockThreshold: "5" }); }}>
+      <DialogTrigger asChild>
+        <button
+          data-testid={`button-manage-variants-${productId}`}
+          onClick={(e) => e.stopPropagation()}
+          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors shrink-0"
+          title="Manage variants"
+        >
+          <Layers className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Variants — {productName}</DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4 pt-1">
+            {variants.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">No variants yet.</p>
+            ) : (
+              <div className="divide-y divide-border rounded-lg border overflow-hidden">
+                {variants.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between px-3 py-2.5 bg-background">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{v.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(Number(v.price))} · {Number(v.stockQuantity)} in stock
+                      </p>
+                    </div>
+                    {variants.length > 1 && (
+                      <button
+                        disabled={deleteVariant.isPending && deletingId === v.id}
+                        onClick={() => { setDeletingId(v.id); deleteVariant.mutate(v.id); }}
+                        className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors shrink-0 ml-2"
+                        title="Remove variant"
+                      >
+                        {deleteVariant.isPending && deletingId === v.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add New Variant</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-0.5 block">Name *</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. 500g"
+                    className="w-full border border-input rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-0.5 block">Price (KES) *</label>
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                    placeholder="0"
+                    className="w-full border border-input rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-0.5 block">Initial Stock *</label>
+                  <input
+                    type="number"
+                    value={form.stockQuantity}
+                    onChange={(e) => setForm((f) => ({ ...f, stockQuantity: e.target.value }))}
+                    placeholder="0"
+                    className="w-full border border-input rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-0.5 block">Low Stock Alert At</label>
+                  <input
+                    type="number"
+                    value={form.lowStockThreshold}
+                    onChange={(e) => setForm((f) => ({ ...f, lowStockThreshold: e.target.value }))}
+                    placeholder="5"
+                    className="w-full border border-input rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <button
+                disabled={!form.name || !form.price || !form.stockQuantity || createVariant.isPending}
+                onClick={() =>
+                  createVariant.mutate({
+                    id: productId,
+                    data: {
+                      name: form.name,
+                      price: Number(form.price),
+                      stockQuantity: Number(form.stockQuantity),
+                      lowStockThreshold: form.lowStockThreshold ? Number(form.lowStockThreshold) : 5,
+                    },
+                  })
+                }
+                className="w-full bg-primary text-primary-foreground text-sm font-medium py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5"
+              >
+                {createVariant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Add Variant
+              </button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type CsvRow = { name: string; category: string; basePrice: string; unit: string; stockQuantity: string; lowStockThreshold: string };
 
 function parseCsv(text: string): CsvRow[] {
@@ -897,6 +1078,13 @@ export default function InventoryPage() {
                         }
                       />
                       <StockAdjustDialog
+                        productId={product.id}
+                        productName={product.name}
+                        onUpdated={() =>
+                          queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+                        }
+                      />
+                      <ManageVariantsDialog
                         productId={product.id}
                         productName={product.name}
                         onUpdated={() =>
