@@ -34,8 +34,8 @@ function useInboxBadge() {
       try {
         const res = await fetch("/api/messages/stats");
         if (!res.ok) return;
-        const data = (await res.json()) as { recentInbound?: number };
-        if (active) setCount(data.recentInbound ?? 0);
+        const data = (await res.json()) as { unreadConversations?: number; recentInbound?: number };
+        if (active) setCount(data.unreadConversations ?? data.recentInbound ?? 0);
       } catch { /* ignore */ }
     };
     poll();

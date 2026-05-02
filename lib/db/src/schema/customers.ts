@@ -13,6 +13,7 @@ export const customersTable = pgTable("customers", {
   totalSpend: numeric("total_spend", { precision: 12, scale: 2 }).notNull().default("0"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
   lastOrderAt: timestamp("last_order_at"),
+  lastReadAt: timestamp("last_read_at"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

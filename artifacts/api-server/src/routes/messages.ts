@@ -59,21 +59,41 @@ router.get("/messages/conversations", async (req, res) => {
     )
     .groupBy(whatsappMessagesTable.customerId);
 
+  // Fetch lastReadAt per customer to compute hasUnread
+  const readTimestamps = await db
+    .select({ id: customersTable.id, lastReadAt: customersTable.lastReadAt })
+    .from(customersTable)
+    .where(
+      sql`${customersTable.id} = ANY(ARRAY[${sql.join(
+        conversations.map((c) => sql`${c.customerId}`),
+        sql`, `
+      )}]::int[])`
+    );
+  const readByCustomer = Object.fromEntries(
+    readTimestamps.map((r) => [r.id, r.lastReadAt])
+  );
+
   const countByCustomer = Object.fromEntries(
     inboundCounts.map((r) => [r.customerId, Number(r.inboundCount)])
   );
 
-  const result = conversations.map((c) => ({
-    customerId: c.customerId,
-    customerName: c.customerName ?? c.customerWhatsappName ?? c.customerPhone,
-    customerPhone: c.customerPhone,
-    totalOrders: c.customerTotalOrders,
-    lastMessage: c.lastMessageBody,
-    lastMessageDirection: c.lastMessageDirection,
-    lastMessageAt: c.lastMessageAt,
-    isOrderMessage: c.isOrderMessage,
-    inboundCount: countByCustomer[c.customerId ?? 0] ?? 0,
-  }));
+  const result = conversations.map((c) => {
+    const lastReadAt = readByCustomer[c.customerId ?? 0] ?? null;
+    const lastInboundAt = c.lastMessageDirection === "inbound" ? c.lastMessageAt : null;
+    const hasUnread = lastInboundAt != null && (lastReadAt == null || new Date(lastInboundAt) > new Date(lastReadAt));
+    return {
+      customerId: c.customerId,
+      customerName: c.customerName ?? c.customerWhatsappName ?? c.customerPhone,
+      customerPhone: c.customerPhone,
+      totalOrders: c.customerTotalOrders,
+      lastMessage: c.lastMessageBody,
+      lastMessageDirection: c.lastMessageDirection,
+      lastMessageAt: c.lastMessageAt,
+      isOrderMessage: c.isOrderMessage,
+      inboundCount: countByCustomer[c.customerId ?? 0] ?? 0,
+      hasUnread,
+    };
+  });
 
   res.json({ conversations: result });
 });
@@ -153,6 +173,22 @@ router.get("/messages/thread/:customerId", async (req, res) => {
   });
 });
 
+// PATCH /api/messages/thread/:customerId/mark-read
+// Sets lastReadAt = now() for the customer, clearing the unread indicator.
+router.patch("/messages/thread/:customerId/mark-read", async (req, res) => {
+  const customerId = parseInt(req.params.customerId, 10);
+  if (isNaN(customerId)) {
+    res.status(400).json({ error: "Invalid customerId" });
+    return;
+  }
+  const now = new Date();
+  await db
+    .update(customersTable)
+    .set({ lastReadAt: now })
+    .where(eq(customersTable.id, customerId));
+  res.json({ ok: true, lastReadAt: now.toISOString() });
+});
+
 // POST /api/messages/thread/:customerId/reply
 // Send a reply from the dashboard to the customer
 router.post("/messages/thread/:customerId/reply", async (req, res) => {
@@ -209,11 +245,12 @@ router.post("/messages/thread/:customerId/reply", async (req, res) => {
 });
 
 // GET /api/messages/stats
-// Quick stats for the inbox badge
+// Quick stats for the inbox badge.
+// unreadConversations = conversations where last inbound > lastReadAt (or never read).
 router.get("/messages/stats", async (req, res) => {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-  const [[totalInbound], [orderMessages], [distinctCustomers], [recentInbound]] =
+  const [[totalInbound], [orderMessages], [distinctCustomers], [recentInbound], unreadRows] =
     await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -247,6 +284,27 @@ router.get("/messages/stats", async (req, res) => {
             gte(whatsappMessagesTable.createdAt, oneHourAgo)
           )
         ),
+      // Count conversations where last inbound msg > customer.lastReadAt (or lastReadAt is null)
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(customersTable)
+        .innerJoin(
+          whatsappMessagesTable,
+          and(
+            eq(whatsappMessagesTable.customerId, customersTable.id),
+            eq(whatsappMessagesTable.businessId, 1),
+            eq(whatsappMessagesTable.direction, "inbound"),
+            sql`${whatsappMessagesTable.id} = (
+              SELECT MAX(wm2.id) FROM whatsapp_messages wm2
+              WHERE wm2.customer_id = ${customersTable.id}
+                AND wm2.business_id = 1
+                AND wm2.direction = 'inbound'
+            )`
+          )
+        )
+        .where(
+          sql`(${customersTable.lastReadAt} IS NULL OR ${whatsappMessagesTable.createdAt} > ${customersTable.lastReadAt})`
+        ),
     ]);
 
   res.json({
@@ -254,6 +312,7 @@ router.get("/messages/stats", async (req, res) => {
     orderMessages: Number(orderMessages?.count ?? 0),
     activeConversations: Number(distinctCustomers?.count ?? 0),
     recentInbound: Number(recentInbound?.count ?? 0),
+    unreadConversations: Number(unreadRows[0]?.count ?? 0),
   });
 });
 

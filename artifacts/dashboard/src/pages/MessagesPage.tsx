@@ -33,6 +33,7 @@ interface Conversation {
   lastMessageAt: string;
   isOrderMessage: boolean;
   inboundCount: number;
+  hasUnread: boolean;
 }
 
 interface Message {
@@ -92,8 +93,8 @@ function ConversationItem({
               {conv.customerName}
             </span>
             <div className="flex items-center gap-1.5 ml-2 shrink-0">
-              {conv.lastMessageDirection === "inbound" && (
-                <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" title="Awaiting reply" />
+              {conv.hasUnread && (
+                <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" title="Unread message" />
               )}
               <span className="text-xs text-muted-foreground">
                 {formatTimeAgo(conv.lastMessageAt)}
@@ -468,9 +469,19 @@ export default function MessagesPage() {
     : allConversations;
   const selectedConv = allConversations.find((c) => c.customerId === selectedCustomerId);
 
+  const markReadMutation = useMutation({
+    mutationFn: async (customerId: number) => {
+      await fetch(`${BASE}/api/messages/thread/${customerId}/mark-read`, { method: "PATCH" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
   function selectConversation(id: number) {
     setSelectedCustomerId(id);
     setShowThread(true);
+    markReadMutation.mutate(id);
   }
 
   function handleSend() {

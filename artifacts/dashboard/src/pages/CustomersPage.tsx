@@ -350,7 +350,7 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
             initialItems={reorderItems.length > 0 ? reorderItems : undefined}
           />
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted rounded-lg p-3 text-center">
               <p className="text-xs text-muted-foreground">Orders</p>
               <p className="text-sm font-bold mt-0.5">{customer.totalOrders}</p>
@@ -358,6 +358,14 @@ function CustomerDetail({ customerId, onClose }: { customerId: number; onClose: 
             <div className="bg-muted rounded-lg p-3 text-center">
               <p className="text-xs text-muted-foreground">Total Spend</p>
               <p className="text-sm font-bold mt-0.5">{formatCurrency(Number(customer.totalSpend))}</p>
+            </div>
+            <div className="bg-muted rounded-lg p-3 text-center">
+              <p className="text-xs text-muted-foreground">Avg Order Value</p>
+              <p className="text-sm font-bold mt-0.5">
+                {customer.totalOrders > 0
+                  ? formatCurrency(Number(customer.totalSpend) / customer.totalOrders)
+                  : "—"}
+              </p>
             </div>
             <div className="bg-muted rounded-lg p-3 text-center">
               <p className="text-xs text-muted-foreground">Loyalty</p>

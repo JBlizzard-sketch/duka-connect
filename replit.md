@@ -26,6 +26,12 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## Shipped Features (Batch 25)
+
+- **Mark conversation as read**: `last_read_at` timestamp column added to `customersTable` (DB migrated). New `PATCH /api/messages/thread/:customerId/mark-read` endpoint sets `lastReadAt = now()`. `GET /api/messages/conversations` now fetches `lastReadAt` per customer and computes `hasUnread` (true when last inbound message is newer than `lastReadAt` or never read). `GET /api/messages/stats` adds `unreadConversations` count via a correlated subquery. `Layout.tsx` inbox badge reads `unreadConversations` (fallback to `recentInbound`). MessagesPage `selectConversation()` fires the mark-read mutation on open and the pulsing orange dot now reflects `hasUnread` (persistent read-state) instead of the message direction.
+- **Product SKU / Barcode field**: `sku` varchar already existed on `productsTable`; now exposed in Add Product and Edit Product dialogs ("SKU / Barcode (optional)" field). Passed as `sku` in `createProduct` / `updateProduct` mutate calls. Displayed on product cards in monospace below category when set.
+- **Customer Average Order Value**: Customer detail sheet stats grid changed from 3-column to 2×2. A new "Avg Order Value" tile computes `totalSpend / totalOrders` client-side (shows "—" for customers with no orders yet). The existing Orders / Total Spend / Loyalty tiles are preserved.
+
 ## Shipped Features (Batch 24)
 
 - **Top Products: per-product margin badge**: `GET /api/analytics/top-products` now left-joins `productsTable` to get `costPrice` and computes `avgUnitPrice` per product. Response includes `marginPct` (integer %, null when no costPrice set). AnalyticsPage shows a colour-coded pill badge (green ≥30%, amber ≥10%, red <10%) next to the revenue for each product row; hidden when margin is unknown.

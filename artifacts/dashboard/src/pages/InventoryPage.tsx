@@ -47,7 +47,7 @@ function EditProductDialog({
   product,
   onUpdated,
 }: {
-  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string; description?: string | null; imageUrl?: string | null; costPrice?: number | null };
+  product: { id: number; name: string; category?: string | null; basePrice: number; unit: string; description?: string | null; imageUrl?: string | null; costPrice?: number | null; sku?: string | null };
   onUpdated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -59,6 +59,7 @@ function EditProductDialog({
     description: product.description ?? "",
     imageUrl: product.imageUrl ?? "",
     costPrice: product.costPrice != null ? String(product.costPrice) : "",
+    sku: product.sku ?? "",
   });
   const { toast } = useToast();
   const updateProduct = useUpdateProduct({
@@ -82,6 +83,7 @@ function EditProductDialog({
       description: product.description ?? "",
       imageUrl: product.imageUrl ?? "",
       costPrice: product.costPrice != null ? String(product.costPrice) : "",
+      sku: product.sku ?? "",
     });
     setOpen(true);
   }
@@ -105,6 +107,7 @@ function EditProductDialog({
         <div className="space-y-3 pt-2">
           {[
             { key: "name", label: "Product Name", placeholder: "e.g. Panadol 500mg" },
+            { key: "sku", label: "SKU / Barcode (optional)", placeholder: "e.g. MED-0042" },
             { key: "category", label: "Category", placeholder: "e.g. Medicine" },
             { key: "basePrice", label: "Selling Price (KES)", placeholder: "50", type: "number" },
             { key: "costPrice", label: "Cost Price (KES, optional)", placeholder: "30", type: "number" },
@@ -162,6 +165,7 @@ function EditProductDialog({
                 id: product.id,
                 data: {
                   name: form.name,
+                  sku: form.sku || undefined,
                   category: form.category || undefined,
                   basePrice: Number(form.basePrice),
                   unit: form.unit,
@@ -185,6 +189,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: "",
+    sku: "",
     category: "",
     basePrice: "",
     costPrice: "",
@@ -199,7 +204,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", category: "", basePrice: "", costPrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5", description: "", imageUrl: "" });
+        setForm({ name: "", sku: "", category: "", basePrice: "", costPrice: "", unit: "piece", initialStock: "", lowStockThreshold: "5", description: "", imageUrl: "" });
         onCreated();
         toast({ title: "Product added" });
       },
@@ -225,6 +230,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
         <div className="space-y-3 pt-2">
           {[
             { key: "name", label: "Product Name", placeholder: "e.g. Panadol 500mg" },
+            { key: "sku", label: "SKU / Barcode (optional)", placeholder: "e.g. MED-0042" },
             { key: "category", label: "Category", placeholder: "e.g. Medicine" },
             { key: "basePrice", label: "Selling Price (KES)", placeholder: "50", type: "number" },
             { key: "costPrice", label: "Cost Price (KES, optional)", placeholder: "30", type: "number" },
@@ -285,6 +291,7 @@ function AddProductDialog({ onCreated }: { onCreated: () => void }) {
               createProduct.mutate({
                 data: {
                   name: form.name,
+                  sku: form.sku || undefined,
                   category: form.category || undefined,
                   basePrice: Number(form.basePrice),
                   unit: form.unit,
@@ -1136,6 +1143,11 @@ export default function InventoryPage() {
                           {product.category}
                         </p>
                       )}
+                      {(product as typeof product & { sku?: string | null }).sku && (
+                        <p className="text-xs font-mono text-muted-foreground mt-0.5 tracking-wide">
+                          {(product as typeof product & { sku?: string | null }).sku}
+                        </p>
+                      )}
                       {(product as typeof product & { description?: string | null }).description && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                           {(product as typeof product & { description?: string | null }).description}
@@ -1147,6 +1159,7 @@ export default function InventoryPage() {
                         product={{
                           id: product.id,
                           name: product.name,
+                          sku: (product as typeof product & { sku?: string | null }).sku,
                           category: product.category,
                           basePrice: Number(product.basePrice),
                           unit: product.unit,
