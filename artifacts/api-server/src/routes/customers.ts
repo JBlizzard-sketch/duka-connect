@@ -1,0 +1,102 @@
+import { Router } from "express";
+import { db } from "@workspace/db";
+import { customersTable, ordersTable } from "@workspace/db";
+import { eq, ilike, desc, sql, count } from "drizzle-orm";
+import {
+  ListCustomersQueryParams,
+  GetCustomerParams,
+  GetTopCustomersQueryParams,
+} from "@workspace/api-zod";
+
+const router = Router();
+
+router.get("/customers", async (req, res) => {
+  const parsed = ListCustomersQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+  const { search, page = 1, limit = 50 } = parsed.data;
+
+  const where = search ? ilike(customersTable.name, `%${search}%`) : undefined;
+
+  const [customers, [{ total }]] = await Promise.all([
+    db
+      .select()
+      .from(customersTable)
+      .where(where)
+      .orderBy(desc(customersTable.totalSpend))
+      .limit(limit)
+      .offset((page - 1) * limit),
+    db.select({ total: count() }).from(customersTable).where(where),
+  ]);
+
+  res.json({
+    customers,
+    meta: {
+      total: Number(total),
+      page,
+      limit,
+      totalPages: Math.ceil(Number(total) / limit),
+    },
+  });
+});
+
+router.get("/customers/stats/top", async (req, res) => {
+  const parsed = GetTopCustomersQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+  const { by = "spend", limit = 10 } = parsed.data;
+
+  const customers = await db
+    .select()
+    .from(customersTable)
+    .orderBy(
+      by === "spend"
+        ? desc(sql`cast(${customersTable.totalSpend} as numeric)`)
+        : desc(customersTable.totalOrders)
+    )
+    .limit(limit);
+
+  res.json({
+    customers,
+    meta: {
+      total: customers.length,
+      page: 1,
+      limit,
+      totalPages: 1,
+    },
+  });
+});
+
+router.get("/customers/:id", async (req, res) => {
+  const parsed = GetCustomerParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.id, parsed.data.id))
+    .limit(1);
+
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
+  const recentOrders = await db
+    .select()
+    .from(ordersTable)
+    .where(eq(ordersTable.customerId, customer.id))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(10);
+
+  res.json({ ...customer, recentOrders });
+});
+
+export default router;

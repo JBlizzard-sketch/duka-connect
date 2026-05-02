@@ -3,20 +3,38 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: WhatsApp Order Management API for Nairobi SMEs
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: webhooks
+    description: WhatsApp and Mpesa webhook receivers
+  - name: orders
+    description: Order management
+  - name: products
+    description: Product and inventory management
+  - name: customers
+    description: Customer profiles and loyalty
+  - name: payments
+    description: Mpesa payment operations
+  - name: analytics
+    description: Business analytics and reporting
+  - name: broadcasts
+    description: WhatsApp broadcast messages
+  - name: staff
+    description: Staff and access management
+  - name: businesses
+    description: Business account management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +42,1338 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Webhooks ─────────────────────────────────────────────────────────────
+  /webhooks/whatsapp:
+    get:
+      operationId: verifyWhatsappWebhook
+      tags: [webhooks]
+      summary: Webhook verification challenge (Meta)
+      parameters:
+        - name: hub.mode
+          in: query
+          schema: { type: string }
+        - name: hub.challenge
+          in: query
+          schema: { type: string }
+        - name: hub.verify_token
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Challenge accepted
+          content:
+            text/plain:
+              schema: { type: string }
+        "403":
+          description: Forbidden
+    post:
+      operationId: receiveWhatsappWebhook
+      tags: [webhooks]
+      summary: Receive WhatsApp Cloud API webhook events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappWebhookPayload"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AckResponse"
+
+  /webhooks/mpesa:
+    post:
+      operationId: receiveMpesaCallback
+      tags: [webhooks]
+      summary: Receive Mpesa STK push callback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MpesaCallbackPayload"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AckResponse"
+
+  # ── Orders ───────────────────────────────────────────────────────────────
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders with optional filters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: customerId
+          in: query
+          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Manually create an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get a single order with items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Order detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Not found
+
+  /orders/stats/summary:
+    get:
+      operationId: getOrdersSummary
+      tags: [orders]
+      summary: Today's order counts and revenue summary
+      responses:
+        "200":
+          description: Daily summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersSummary"
+
+  # ── Products / Inventory ─────────────────────────────────────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List all products with stock levels
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: lowStock
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a new product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product with variants and stock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product details or stock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /products/{id}/variants:
+    post:
+      operationId: createProductVariant
+      tags: [products]
+      summary: Add a variant to a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVariantRequest"
+      responses:
+        "201":
+          description: Created variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductVariant"
+
+  /products/{id}/variants/{variantId}:
+    patch:
+      operationId: updateProductVariant
+      tags: [products]
+      summary: Update variant stock or price
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: variantId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVariantRequest"
+      responses:
+        "200":
+          description: Updated variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductVariant"
+
+  /products/stats/low-stock:
+    get:
+      operationId: getLowStockProducts
+      tags: [products]
+      summary: Products at or below low-stock threshold
+      responses:
+        "200":
+          description: Low-stock products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+
+  # ── Customers ────────────────────────────────────────────────────────────
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers with order history counts
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListResponse"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer profile with order history and loyalty
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDetail"
+        "404":
+          description: Not found
+
+  /customers/stats/top:
+    get:
+      operationId: getTopCustomers
+      tags: [customers]
+      summary: Top customers by spend or order count
+      parameters:
+        - name: by
+          in: query
+          schema:
+            type: string
+            enum: [spend, orders]
+            default: spend
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Top customers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListResponse"
+
+  # ── Payments ─────────────────────────────────────────────────────────────
+  /payments/initiate:
+    post:
+      operationId: initiatePayment
+      tags: [payments]
+      summary: Initiate Mpesa STK push for an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiatePaymentRequest"
+      responses:
+        "200":
+          description: STK push initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentInitiateResponse"
+
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: Get payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payment record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          description: Not found
+
+  # ── Analytics ────────────────────────────────────────────────────────────
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Revenue and order summary for a time range
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, week, month]
+            default: today
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/top-products:
+    get:
+      operationId: getTopProducts
+      tags: [analytics]
+      summary: Best-selling products by quantity or revenue
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, week, month]
+            default: week
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Top products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopProductsResponse"
+
+  /analytics/revenue-by-hour:
+    get:
+      operationId: getRevenueByHour
+      tags: [analytics]
+      summary: Order volume and revenue grouped by hour of day
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, week, month]
+            default: week
+      responses:
+        "200":
+          description: Hourly breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueByHourResponse"
+
+  # ── Broadcasts ───────────────────────────────────────────────────────────
+  /broadcasts:
+    get:
+      operationId: listBroadcasts
+      tags: [broadcasts]
+      summary: List past broadcast messages
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Broadcasts list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastListResponse"
+    post:
+      operationId: createBroadcast
+      tags: [broadcasts]
+      summary: Send a WhatsApp broadcast to a customer segment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBroadcastRequest"
+      responses:
+        "201":
+          description: Broadcast queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broadcast"
+
+  # ── Staff ────────────────────────────────────────────────────────────────
+  /staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List all staff members
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffListResponse"
+    post:
+      operationId: inviteStaff
+      tags: [staff]
+      summary: Invite a staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteStaffRequest"
+      responses:
+        "201":
+          description: Staff invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+
+  /staff/{id}:
+    patch:
+      operationId: updateStaff
+      tags: [staff]
+      summary: Update staff role or status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffRequest"
+      responses:
+        "200":
+          description: Updated staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+    delete:
+      operationId: removeStaff
+      tags: [staff]
+      summary: Remove a staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Removed
+
+  # ── Business ─────────────────────────────────────────────────────────────
+  /business/profile:
+    get:
+      operationId: getBusinessProfile
+      tags: [businesses]
+      summary: Get the business profile and WhatsApp config status
+      responses:
+        "200":
+          description: Business profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+    patch:
+      operationId: updateBusinessProfile
+      tags: [businesses]
+      summary: Update business profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessProfileRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+
 components:
   schemas:
+    # ── Primitives ────────────────────────────────────────────────────────
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    AckResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required: [total, page, limit, totalPages]
+
+    # ── Enums ─────────────────────────────────────────────────────────────
+    OrderStatus:
+      type: string
+      enum: [pending, confirmed, paid, preparing, ready, delivered, cancelled]
+
+    PaymentStatus:
+      type: string
+      enum: [pending, processing, completed, failed, cancelled, timeout]
+
+    StaffRole:
+      type: string
+      enum: [owner, manager, staff]
+
+    BroadcastSegment:
+      type: string
+      enum: [all, recent, top_customers, loyal]
+
+    # ── WhatsApp Webhook ──────────────────────────────────────────────────
+    WhatsappWebhookPayload:
+      type: object
+      properties:
+        object:
+          type: string
+        entry:
+          type: array
+          items:
+            type: object
+      required: [object, entry]
+
+    # ── Mpesa Callback ────────────────────────────────────────────────────
+    MpesaCallbackPayload:
+      type: object
+      properties:
+        Body:
+          type: object
+          properties:
+            stkCallback:
+              type: object
+              properties:
+                MerchantRequestID: { type: string }
+                CheckoutRequestID: { type: string }
+                ResultCode: { type: integer }
+                ResultDesc: { type: string }
+                CallbackMetadata:
+                  type: object
+              required: [MerchantRequestID, CheckoutRequestID, ResultCode, ResultDesc]
+          required: [stkCallback]
+      required: [Body]
+
+    # ── Orders ────────────────────────────────────────────────────────────
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalAmount:
+          type: number
+        currency:
+          type: string
+          default: KES
+        rawMessage:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        assignedToId:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, customerId, status, totalAmount, currency, createdAt, updatedAt]
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        productId:
+          type: integer
+        variantId:
+          type: integer
+          nullable: true
+        productName:
+          type: string
+        variantName:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+      required: [id, orderId, productId, productName, quantity, unitPrice, totalPrice]
+
+    OrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrderItem"
+            customer:
+              $ref: "#/components/schemas/Customer"
+            payment:
+              $ref: "#/components/schemas/Payment"
+              nullable: true
+          required: [items, customer]
+
+    OrderListResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [orders, meta]
+
+    OrdersSummary:
+      type: object
+      properties:
+        todayRevenue:
+          type: number
+        todayOrders:
+          type: integer
+        pendingOrders:
+          type: integer
+        paidOrders:
+          type: integer
+        cancelledOrders:
+          type: integer
+        weekRevenue:
+          type: number
+        weekOrders:
+          type: integer
+      required: [todayRevenue, todayOrders, pendingOrders, paidOrders, cancelledOrders, weekRevenue, weekOrders]
+
+    CreateOrderRequest:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId: { type: integer }
+              variantId: { type: integer, nullable: true }
+              quantity: { type: number }
+            required: [productId, quantity]
+        notes:
+          type: string
+      required: [customerId, items]
+
+    UpdateOrderStatusRequest:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        notes:
+          type: string
+      required: [status]
+
+    # ── Products ──────────────────────────────────────────────────────────
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        stockQuantity:
+          type: number
+        lowStockThreshold:
+          type: number
+        unit:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, productId, name, stockQuantity, lowStockThreshold, unit, createdAt]
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        basePrice:
+          type: number
+        unit:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        totalStock:
+          type: number
+        lowStockThreshold:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, basePrice, unit, isActive, totalStock, lowStockThreshold, createdAt]
+
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            variants:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductVariant"
+          required: [variants]
+
+    ProductListResponse:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [products, meta]
+
+    CreateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        basePrice:
+          type: number
+        unit:
+          type: string
+        lowStockThreshold:
+          type: number
+        initialStock:
+          type: number
+        imageUrl:
+          type: string
+      required: [name, basePrice, unit]
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        basePrice:
+          type: number
+        unit:
+          type: string
+        lowStockThreshold:
+          type: number
+        isActive:
+          type: boolean
+        imageUrl:
+          type: string
+
+    CreateVariantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        sku:
+          type: string
+        price:
+          type: number
+        stockQuantity:
+          type: number
+        lowStockThreshold:
+          type: number
+        unit:
+          type: string
+      required: [name, stockQuantity]
+
+    UpdateVariantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        stockQuantity:
+          type: number
+        lowStockThreshold:
+          type: number
+        stockAdjustment:
+          type: number
+          description: Add/subtract from current stock (positive = restock, negative = shrinkage)
+
+    # ── Customers ─────────────────────────────────────────────────────────
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        whatsappPhone:
+          type: string
+        name:
+          type: string
+          nullable: true
+        totalOrders:
+          type: integer
+        totalSpend:
+          type: number
+        loyaltyPoints:
+          type: integer
+        lastOrderAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, whatsappPhone, totalOrders, totalSpend, loyaltyPoints, createdAt]
+
+    CustomerDetail:
+      allOf:
+        - $ref: "#/components/schemas/Customer"
+        - type: object
+          properties:
+            recentOrders:
+              type: array
+              items:
+                $ref: "#/components/schemas/Order"
+          required: [recentOrders]
+
+    CustomerListResponse:
+      type: object
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [customers, meta]
+
+    # ── Payments ──────────────────────────────────────────────────────────
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        amount:
+          type: number
+        currency:
+          type: string
+          default: KES
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        mpesaPhone:
+          type: string
+          nullable: true
+        merchantRequestId:
+          type: string
+          nullable: true
+        checkoutRequestId:
+          type: string
+          nullable: true
+        mpesaReceiptNumber:
+          type: string
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, orderId, amount, currency, status, createdAt]
+
+    InitiatePaymentRequest:
+      type: object
+      properties:
+        orderId:
+          type: integer
+        phone:
+          type: string
+          description: Mpesa phone number (07XX or 254XX format)
+      required: [orderId, phone]
+
+    PaymentInitiateResponse:
+      type: object
+      properties:
+        paymentId:
+          type: integer
+        checkoutRequestId:
+          type: string
+        message:
+          type: string
+      required: [paymentId, checkoutRequestId, message]
+
+    # ── Analytics ─────────────────────────────────────────────────────────
+    AnalyticsSummary:
+      type: object
+      properties:
+        period:
+          type: string
+        revenue:
+          type: number
+        orders:
+          type: integer
+        avgOrderValue:
+          type: number
+        newCustomers:
+          type: integer
+        repeatCustomers:
+          type: integer
+        topCategory:
+          type: string
+          nullable: true
+        revenueChange:
+          type: number
+          description: Percentage change vs previous period
+        ordersChange:
+          type: number
+          description: Percentage change vs previous period
+      required: [period, revenue, orders, avgOrderValue, newCustomers, repeatCustomers, revenueChange, ordersChange]
+
+    TopProduct:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantitySold:
+          type: number
+        revenue:
+          type: number
+        orderCount:
+          type: integer
+      required: [productId, productName, quantitySold, revenue, orderCount]
+
+    TopProductsResponse:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopProduct"
+        period:
+          type: string
+      required: [products, period]
+
+    HourlyDataPoint:
+      type: object
+      properties:
+        hour:
+          type: integer
+          description: Hour of day (0–23)
+        orders:
+          type: integer
+        revenue:
+          type: number
+      required: [hour, orders, revenue]
+
+    RevenueByHourResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourlyDataPoint"
+        period:
+          type: string
+      required: [data, period]
+
+    # ── Broadcasts ────────────────────────────────────────────────────────
+    Broadcast:
+      type: object
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+        segment:
+          $ref: "#/components/schemas/BroadcastSegment"
+        recipientCount:
+          type: integer
+        sentCount:
+          type: integer
+        failedCount:
+          type: integer
+        status:
+          type: string
+          enum: [draft, sending, sent, failed]
+        createdAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, message, segment, recipientCount, sentCount, failedCount, status, createdAt]
+
+    BroadcastListResponse:
+      type: object
+      properties:
+        broadcasts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Broadcast"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [broadcasts, meta]
+
+    CreateBroadcastRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        segment:
+          $ref: "#/components/schemas/BroadcastSegment"
+        scheduleAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [message, segment]
+
+    # ── Staff ─────────────────────────────────────────────────────────────
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        role:
+          $ref: "#/components/schemas/StaffRole"
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, role, isActive, createdAt]
+
+    StaffListResponse:
+      type: object
+      properties:
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+      required: [staff]
+
+    InviteStaffRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          $ref: "#/components/schemas/StaffRole"
+      required: [name, role]
+
+    UpdateStaffRequest:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/StaffRole"
+        isActive:
+          type: boolean
+
+    # ── Business ──────────────────────────────────────────────────────────
+    BusinessProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        whatsappPhoneNumberId:
+          type: string
+          nullable: true
+        whatsappConnected:
+          type: boolean
+        mpesaShortCode:
+          type: string
+          nullable: true
+        mpesaConnected:
+          type: boolean
+        currency:
+          type: string
+          default: KES
+        timezone:
+          type: string
+          default: Africa/Nairobi
+        logoUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, whatsappConnected, mpesaConnected, currency, timezone, createdAt]
+
+    UpdateBusinessProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        whatsappPhoneNumberId:
+          type: string
+        mpesaShortCode:
+          type: string
+        currency:
+          type: string
+        timezone:
+          type: string
+        logoUrl:
+          type: string
